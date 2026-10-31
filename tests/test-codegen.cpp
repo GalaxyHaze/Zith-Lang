@@ -1371,6 +1371,7 @@ static void test_imported_result_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-generic-result.zith",
                    "import std/result as res\n"
+                   "import soon/result/fallback as fallback\n"
                    "fn main(): i32 {\n"
                    "    let ok: res.Result<u32, bool> = res.Ok(7);\n"
                    "    let err: res.Result<u32, bool> = res.Err(true);\n"
@@ -1382,10 +1383,59 @@ static void test_imported_result_runtime() {
                    "    if (v != 7u32) { return 5; }\n"
                    "    let e: bool = res.unwrapErr(err);\n"
                    "    if (not e) { return 6; }\n"
+                   "    if (fallback.unwrapOr(ok, 99u32) != 7u32) { return 7; }\n"
+                   "    if (fallback.unwrapOr(err, 99u32) != 99u32) { return 8; }\n"
+                   "    if (not fallback.unwrapErrOr(err, false)) { return 9; }\n"
+                   "    if (fallback.unwrapErrOr(ok, false)) { return 10; }\n"
                    "    return 0;\n"
                    "}\n");
-    CHECK(r.ok, "imported generic Result<T,E> helpers compile, link, and execute");
-    CHECK_EQ(r.exitCode, 0, "Ok/Err/isOk/isErr/unwrap/unwrapErr round-trip on Result");
+    CHECK(r.ok, "imported Result and soon fallback helpers compile, link, and execute");
+    CHECK_EQ(r.exitCode, 0, "Result accessors and fallback helpers cover both Ok and Err branches");
+}
+
+static void test_soon_math_scalar_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-soon-math-scalar.zith",
+                   "import soon/math/scalar as math\n"
+                   "import std/math as baseMath\n"
+                   "fn main(): i32 {\n"
+                   "    if (math.minI32(4, -3) != -3) { return 1; }\n"
+                   "    if (math.maxI32(4, -3) != 4) { return 2; }\n"
+                   "    if (math.clampI32(-2, 0, 5) != 0) { return 3; }\n"
+                   "    if (math.clampI32(3, 0, 5) != 3) { return 4; }\n"
+                   "    if (math.clampI32(8, 0, 5) != 5) { return 5; }\n"
+                   "    if (math.clampI32(3, 5, 0) != 3) { return 6; }\n"
+                   "    let halfPi = math.degreesToRadians(90.0);\n"
+                   "    if (halfPi < 1.57079 or halfPi > 1.57080) { return 7; }\n"
+                   "    let degrees = math.radiansToDegrees(baseMath.pi);\n"
+                   "    if (degrees < 179.9999 or degrees > 180.0001) { return 8; }\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "soon scalar math helpers compile, link, and execute");
+    CHECK_EQ(r.exitCode, 0, "integer bounds and degree/radian conversions return expected values");
+}
+
+static void test_soon_slice_algorithms_runtime() {
+    CodegenTest t;
+    auto r = t.run("codegen-soon-slice-algorithms.zith",
+                   "import soon/algorithms/slice as slices\n"
+                   "fn main(): i32 {\n"
+                   "    var numbers: [4]i32 = [4, 2, 4, 7];\n"
+                   "    let numberSlice: []i32 = raw numbers[0u64..4u64];\n"
+                   "    let first = slices.findIndexI32(numberSlice, 4);\n"
+                   "    if (first is null) { return 1; }\n"
+                   "    let firstIndex: u64 = must first;\n"
+                   "    if (firstIndex != 0u64) { return 2; }\n"
+                   "    if (slices.countI32(numberSlice, 4) != 2u64) { return 3; }\n"
+                   "    if (slices.countI32(numberSlice, 9) != 0u64) { return 4; }\n"
+                   "    let empty: []i32 = raw numbers[0u64..0u64];\n"
+                   "    let emptyFirst = slices.findIndexI32(empty, 4);\n"
+                   "    if (not (emptyFirst is null)) { return 5; }\n"
+                   "    if (slices.countI32(empty, 4) != 0u64) { return 6; }\n"
+                   "    return 0;\n"
+                   "}\n");
+    CHECK(r.ok, "soon slice algorithms compile, link, and execute");
+    CHECK_EQ(r.exitCode, 0, "findIndexI32 and countI32 handle matches, absence, and empty slices");
 }
 
 static void test_imported_panic_runtime() {
@@ -4572,6 +4622,10 @@ static void test_codegen() {
     test_imported_generic_dynarray_runtime();
     printf("Running test_imported_result_runtime\n");
     test_imported_result_runtime();
+    printf("Running test_soon_math_scalar_runtime\n");
+    test_soon_math_scalar_runtime();
+    printf("Running test_soon_slice_algorithms_runtime\n");
+    test_soon_slice_algorithms_runtime();
     printf("Running test_imported_panic_runtime\n");
     test_imported_panic_runtime();
     printf("Running test_imported_memory_new_delete_runtime\n");

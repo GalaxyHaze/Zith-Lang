@@ -860,8 +860,10 @@ std::vector<StmtId> AstLowerer::parseStatements() {
             applyLoopLabel(loop_expr, loop_label);
         statement.expression = loop_expr;
         statement.span       = range(start, index_);
-        if (punctuation(index_, ';'))
+        if (punctuation(index_, ';')) {
+            statement.hasSemicolon = true;
             ++index_;
+        }
         return {addStatement(std::move(statement))};
     }
     if (word == "let" || word == "var" || word == "const") {
@@ -1129,8 +1131,10 @@ std::vector<StmtId> AstLowerer::parseStatements() {
                 ++index_;
         }
     }
-    if (punctuation(index_, ';'))
+    if (punctuation(index_, ';')) {
+        statement.hasSemicolon = true;
         ++index_;
+    }
     statement.span = range(start, index_);
     return {addStatement(std::move(statement))};
 }

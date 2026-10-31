@@ -51,6 +51,8 @@ bool HirLowerModern::lowerStatement(frontend::StmtId id, hir::HirExprId &last_va
                 else
                     current_fn_->blocks[current_block_].insts.push(last_value);
             }
+            if (statement.hasSemicolon)
+                last_value = hir::kInvalidHirExpr;
         }
         return true;
     case frontend::StmtKind::Discard:

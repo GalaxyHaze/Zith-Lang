@@ -205,6 +205,15 @@ void PerModuleSema::inferJump(const frontend::Statement &stmt) {
         (void)checkVariadicTail(stmt.span, stmt.arguments, fn, plan.sliceParam, true);
 }
 void PerModuleSema::checkReturnStatement(const frontend::Statement &stmt) {
+    if (inferringReturnType_) {
+        if (!stmt.expression) {
+            recordInferredReturn(void_type, {}, stmt.span);
+            return;
+        }
+        const TypeId value = inferExpr(stmt.expression);
+        recordInferredReturn(value, stmt.expression, stmt.span);
+        return;
+    }
     if (!stmt.expression) {
         // `return;` in a function that promises a value is still a mismatch.
         if (currentReturnType_ && resolve(currentReturnType_) != void_type &&
@@ -244,6 +253,11 @@ TypeId PerModuleSema::inferReturn(frontend::ExprId id) {
     TypeId value     = expr.operands.empty()
                            ? void_type
                            : inferExprExpected(expr.operands[0], currentReturnType_);
+    if (inferringReturnType_) {
+        recordInferredReturn(value, expr.operands.empty() ? frontend::ExprId{} : expr.operands[0],
+                             expr.span);
+        return type_table.internName("never", TypeKind::Never);
+    }
     if (currentReturnType_ && value && value != error_type && !expr.operands.empty() &&
         !coerceValue(expr.operands[0], currentReturnType_, value)) {
         reportCoercionFailure(expr.span, currentReturnType_, value,

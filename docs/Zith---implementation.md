@@ -170,6 +170,18 @@ superfície comum da stdlib.
 
 ## Sema
 
+Uma função sem tipo de retorno explícito infere o resultado pela expressão final do corpo e
+pelos `return` com valor. Corpos sem resultado inferem `void`. Os tipos dos retornos têm de
+coincidir ou aceitar a coerção já permitida pelo sema. Ciclos de chamadas que envolvam funções
+com retorno inferido, diretos ou indiretos, exigem uma anotação explícita e reportam `E3002`.
+O sema não infere retornos `union` ou `dyn`, que também exigem anotação.
+
+O `SemaPipeline` infere estas assinaturas antes da análise normal para disponibilizá-las a
+chamadores declarados anteriormente. Esse passe provisório suprime diagnósticos semânticos
+comuns e descarta os facts de expressão antes da passagem final. Mantém os tipos locais, pois
+bindings anotados sem inicializador e parâmetros já têm tipos válidos; o tracking flow-sensitive
+de atribuições é isolado para não tratar a primeira atribuição de um `let` como uma segunda.
+
 `checkZithDeclarations` roda dentro de `checkExpressions` e verifica:
 
 - Todo `const` tem inicializador.

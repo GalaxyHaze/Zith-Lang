@@ -1,0 +1,116 @@
+from vec
+import std/math as m
+
+/// 3x3 column-major matrix stored as column vectors.
+pub struct Mat3 {
+    c0: Vec3 = vec3(0.0, 0.0, 0.0),
+    c1: Vec3 = vec3(0.0, 0.0, 0.0),
+    c2: Vec3 = vec3(0.0, 0.0, 0.0),
+}
+
+/// 4x4 column-major matrix stored as column vectors.
+pub struct Mat4 {
+    c0: Vec4 = vec4(0.0, 0.0, 0.0, 0.0),
+    c1: Vec4 = vec4(0.0, 0.0, 0.0, 0.0),
+    c2: Vec4 = vec4(0.0, 0.0, 0.0, 0.0),
+    c3: Vec4 = vec4(0.0, 0.0, 0.0, 0.0),
+}
+
+implement Mat3 {
+    pub fn identity(): Self {
+        Mat3 { c0: vec3(1.0, 0.0, 0.0), c1: vec3(0.0, 1.0, 0.0), c2: vec3(0.0, 0.0, 1.0) }
+    }
+
+    pub fn mul(self: view Mat3, other: view Mat3): Self {
+        let a0 = self.c0; let a1 = self.c1; let a2 = self.c2;
+        Mat3 {
+            c0: vec3(a0.x * other.c0.x + a1.x * other.c0.y + a2.x * other.c0.z, a0.y * other.c0.x + a1.y * other.c0.y + a2.y * other.c0.z, a0.z * other.c0.x + a1.z * other.c0.y + a2.z * other.c0.z),
+            c1: vec3(a0.x * other.c1.x + a1.x * other.c1.y + a2.x * other.c1.z, a0.y * other.c1.x + a1.y * other.c1.y + a2.y * other.c1.z, a0.z * other.c1.x + a1.z * other.c1.y + a2.z * other.c1.z),
+            c2: vec3(a0.x * other.c2.x + a1.x * other.c2.y + a2.x * other.c2.z, a0.y * other.c2.x + a1.y * other.c2.y + a2.y * other.c2.z, a0.z * other.c2.x + a1.z * other.c2.y + a2.z * other.c2.z),
+        }
+    }
+
+    pub fn transformPoint(self: view Mat3, p: view Vec3): Vec3 {
+        vec3(
+            self.c0.x * p.x + self.c1.x * p.y + self.c2.x * p.z,
+            self.c0.y * p.x + self.c1.y * p.y + self.c2.y * p.z,
+            self.c0.z * p.x + self.c1.z * p.y + self.c2.z * p.z)
+    }
+
+    pub fn transformVector(self: view Mat3, v: view Vec3): Vec3 {
+        self.transformPoint(v)
+    }
+
+    pub fn rotate(angle: f64): Self {
+        let c = m.cos(angle);
+        let s = m.sin(angle);
+        Mat3 { c0: vec3(c, s, 0.0), c1: vec3(-s, c, 0.0), c2: vec3(0.0, 0.0, 1.0) }
+    }
+
+    pub fn scale(sx: f64, sy: f64): Self {
+        Mat3 { c0: vec3(sx, 0.0, 0.0), c1: vec3(0.0, sy, 0.0), c2: vec3(0.0, 0.0, 1.0) }
+    }
+
+    pub fn translate(tx: f64, ty: f64): Self {
+        Mat3 { c0: vec3(1.0, 0.0, 0.0), c1: vec3(0.0, 1.0, 0.0), c2: vec3(tx, ty, 1.0) }
+    }
+}
+
+implement Mat4 {
+    pub fn identity(): Self {
+        Mat4 {
+            c0: vec4(1.0, 0.0, 0.0, 0.0),
+            c1: vec4(0.0, 1.0, 0.0, 0.0),
+            c2: vec4(0.0, 0.0, 1.0, 0.0),
+            c3: vec4(0.0, 0.0, 0.0, 1.0),
+        }
+    }
+
+    pub fn mul(self: view Mat4, other: view Mat4): Self {
+        let a0 = self.c0; let a1 = self.c1; let a2 = self.c2; let a3 = self.c3;
+        Mat4 {
+            c0: vec4(a0.x * other.c0.x + a1.x * other.c0.y + a2.x * other.c0.z + a3.x * other.c0.w, a0.y * other.c0.x + a1.y * other.c0.y + a2.y * other.c0.z + a3.y * other.c0.w, a0.z * other.c0.x + a1.z * other.c0.y + a2.z * other.c0.z + a3.z * other.c0.w, a0.w * other.c0.x + a1.w * other.c0.y + a2.w * other.c0.z + a3.w * other.c0.w),
+            c1: vec4(a0.x * other.c1.x + a1.x * other.c1.y + a2.x * other.c1.z + a3.x * other.c1.w, a0.y * other.c1.x + a1.y * other.c1.y + a2.y * other.c1.z + a3.y * other.c1.w, a0.z * other.c1.x + a1.z * other.c1.y + a2.z * other.c1.z + a3.z * other.c1.w, a0.w * other.c1.x + a1.w * other.c1.y + a2.w * other.c1.z + a3.w * other.c1.w),
+            c2: vec4(a0.x * other.c2.x + a1.x * other.c2.y + a2.x * other.c2.z + a3.x * other.c2.w, a0.y * other.c2.x + a1.y * other.c2.y + a2.y * other.c2.z + a3.y * other.c2.w, a0.z * other.c2.x + a1.z * other.c2.y + a2.z * other.c2.z + a3.z * other.c2.w, a0.w * other.c2.x + a1.w * other.c2.y + a2.w * other.c2.z + a3.w * other.c2.w),
+            c3: vec4(a0.x * other.c3.x + a1.x * other.c3.y + a2.x * other.c3.z + a3.x * other.c3.w, a0.y * other.c3.x + a1.y * other.c3.y + a2.y * other.c3.z + a3.y * other.c3.w, a0.z * other.c3.x + a1.z * other.c3.y + a2.z * other.c3.z + a3.z * other.c3.w, a0.w * other.c3.x + a1.w * other.c3.y + a2.w * other.c3.z + a3.w * other.c3.w),
+        }
+    }
+
+    pub fn transformPoint(self: view Mat4, p: view Vec4): Vec4 {
+        vec4(
+            self.c0.x * p.x + self.c1.x * p.y + self.c2.x * p.z + self.c3.x * p.w,
+            self.c0.y * p.x + self.c1.y * p.y + self.c2.y * p.z + self.c3.y * p.w,
+            self.c0.z * p.x + self.c1.z * p.y + self.c2.z * p.z + self.c3.z * p.w,
+            self.c0.w * p.x + self.c1.w * p.y + self.c2.w * p.z + self.c3.w * p.w)
+    }
+
+    pub fn transformVector(self: view Mat4, v: view Vec4): Vec4 {
+        self.transformPoint(v)
+    }
+
+    pub fn translate(tx: f64, ty: f64, tz: f64): Self {
+        Mat4 { c0: vec4(1.0, 0.0, 0.0, 0.0), c1: vec4(0.0, 1.0, 0.0, 0.0), c2: vec4(0.0, 0.0, 1.0, 0.0), c3: vec4(tx, ty, tz, 1.0) }
+    }
+
+    pub fn scale(sx: f64, sy: f64, sz: f64): Self {
+        Mat4 { c0: vec4(sx, 0.0, 0.0, 0.0), c1: vec4(0.0, sy, 0.0, 0.0), c2: vec4(0.0, 0.0, sz, 0.0), c3: vec4(0.0, 0.0, 0.0, 1.0) }
+    }
+
+    pub fn rotateX(angle: f64): Self {
+        let c = m.cos(angle);
+        let s = m.sin(angle);
+        Mat4 { c0: vec4(1.0, 0.0, 0.0, 0.0), c1: vec4(0.0, c, s, 0.0), c2: vec4(0.0, -s, c, 0.0), c3: vec4(0.0, 0.0, 0.0, 1.0) }
+    }
+
+    pub fn rotateY(angle: f64): Self {
+        let c = m.cos(angle);
+        let s = m.sin(angle);
+        Mat4 { c0: vec4(c, 0.0, -s, 0.0), c1: vec4(0.0, 1.0, 0.0, 0.0), c2: vec4(s, 0.0, c, 0.0), c3: vec4(0.0, 0.0, 0.0, 1.0) }
+    }
+
+    pub fn rotateZ(angle: f64): Self {
+        let c = m.cos(angle);
+        let s = m.sin(angle);
+        Mat4 { c0: vec4(c, s, 0.0, 0.0), c1: vec4(-s, c, 0.0, 0.0), c2: vec4(0.0, 0.0, 1.0, 0.0), c3: vec4(0.0, 0.0, 0.0, 1.0) }
+    }
+}

@@ -8,11 +8,60 @@ namespace zith::sema::modern {
 void PerModuleSema::inferExpressionTypes() {
     inferExpressionTypesForDecls();
 }
-void PerModuleSema::inferExpressionTypesForDecls() {
+void PerModuleSema::prepareStateMachineGrouping() {
     stateMachineByDecl_.clear();
     stateMachineByReturn_.clear();
     localStateMachineByParent_.clear();
     nextStateMachineId_        = 1;
+    for (const auto &decl : snapshot.declarations()) {
+        if (decl.kind == frontend::DeclKind::Function &&
+            decl.functionKind == frontend::FunctionKind::State && !decl.parentScope) {
+            (void)stateMachineIdFor(decl);
+        }
+        if (decl.kind == frontend::DeclKind::Function && decl.parentScope &&
+            decl.functionKind == frontend::FunctionKind::State) {
+            auto &existing = localStateMachineByParent_[decl.parentScope.value];
+            if (existing == 0U)
+                existing = nextStateMachineId_++;
+            stateMachineByDecl_[decl.id.value] = existing;
+        }
+    }
+}
+void PerModuleSema::probeFunctionCallTargets(const frontend::Declaration &decl) {
+    if (!decl.body || decl.body.value > snapshot.expressions().size())
+        return;
+
+    currentDeclId_       = decl.id.value;
+    currentFunctionKind_ = decl.functionKind;
+    currentBodyScope_    = snapshot.expressions()[decl.body.value - 1U].scope;
+    const auto *fn       = type_table.function(typeOfDecl(decl.id));
+    currentReturnType_   = fn != nullptr ? fn->result : kInvalidTypeId;
+    inStateBody_         = decl.functionKind == frontend::FunctionKind::State;
+    currentStateMachineId_ =
+        inStateBody_ ? (decl.parentScope ? stateMachineIdOf(decl) : stateMachineIdFor(decl)) : 0U;
+    movedLocals_.clear();
+    escapingPointerExprs_.clear();
+    escapingPointerLocals_.clear();
+    uninitializedLocals_.clear();
+    preinitializedLocals_.clear();
+    typeInferredByAssignment_.clear();
+    expectedResultType_ = kInvalidTypeId;
+    inferringReturnType_ = false;
+    suppressDiagnostics_ = true;
+
+    (void)inferExpr(decl.body);
+
+    suppressDiagnostics_   = false;
+    currentDeclId_         = 0U;
+    currentFunctionKind_   = frontend::FunctionKind::Standard;
+    currentBodyScope_      = {};
+    currentReturnType_     = kInvalidTypeId;
+    inStateBody_           = false;
+    currentStateMachineId_ = 0U;
+    expectedResultType_    = kInvalidTypeId;
+}
+void PerModuleSema::inferExpressionTypesForDecls() {
+    prepareStateMachineGrouping();
     bool has_non_template_code = false;
     for (const auto &decl : snapshot.declarations()) {
         // A macro declaration is a template, not code: its body only becomes
@@ -21,19 +70,6 @@ void PerModuleSema::inferExpressionTypesForDecls() {
             continue;
         if (decl.kind != frontend::DeclKind::Import)
             has_non_template_code = true;
-        if (decl.kind == frontend::DeclKind::Function &&
-            decl.functionKind == frontend::FunctionKind::State && !decl.parentScope) {
-            (void)stateMachineIdFor(decl);
-        }
-        if (decl.kind == frontend::DeclKind::Function && decl.parentScope &&
-            decl.functionKind == frontend::FunctionKind::State) {
-            // Local states form one machine per parent body, independent of the
-            // top-level return-type grouping.
-            auto &existing = localStateMachineByParent_[decl.parentScope.value];
-            if (existing == 0U)
-                existing = nextStateMachineId_++;
-            stateMachineByDecl_[decl.id.value] = existing;
-        }
         currentDeclId_       = decl.id.value;
         currentFunctionKind_ = decl.kind == frontend::DeclKind::Function
                                    ? decl.functionKind
@@ -103,6 +139,114 @@ void PerModuleSema::inferExpressionTypesForDecls() {
     inStateBody_           = false;
     currentStateMachineId_ = 0;
 }
+
+void PerModuleSema::inferFunctionReturnType(const frontend::Declaration &decl) {
+    const TypeId declared_function_type = typeOfDecl(decl.id);
+    const auto *declared_function       = type_table.function(declared_function_type);
+    if (declared_function == nullptr || !decl.body)
+        return;
+
+    currentDeclId_         = decl.id.value;
+    currentFunctionKind_   = decl.functionKind;
+    currentBodyScope_      = snapshot.expressions()[decl.body.value - 1U].scope;
+    currentReturnType_     = kInvalidTypeId;
+    inStateBody_           = false;
+    currentStateMachineId_ = 0U;
+    movedLocals_.clear();
+    escapingPointerExprs_.clear();
+    escapingPointerLocals_.clear();
+    uninitializedLocals_.clear();
+    preinitializedLocals_.clear();
+    typeInferredByAssignment_.clear();
+    suppressDiagnostics_        = true;
+    inferringReturnType_        = true;
+    inferredReturnCandidate_    = kInvalidTypeId;
+    hasInferredReturnCandidate_ = false;
+    inferredReturnConflict_     = false;
+    inferredReturnConflictSpan_ = {};
+
+    const TypeId body_type = inferExpr(decl.body);
+    suppressDiagnostics_   = false;
+    typeInferredByAssignment_.clear();
+    const auto &body_expr                     = snapshot.expressions()[decl.body.value - 1U];
+    const frontend::Statement *tail_statement = nullptr;
+    if (!body_expr.statements.empty()) {
+        const frontend::StmtId tail_id = body_expr.statements.back();
+        if (tail_id && tail_id.value <= snapshot.statements().size())
+            tail_statement = &snapshot.statements()[tail_id.value - 1U];
+    }
+    const bool discardable_tail =
+        tail_statement != nullptr && tail_statement->kind == frontend::StmtKind::Expression &&
+        tail_statement->expression && calleeIsDiscardable(tail_statement->expression);
+    const bool assignment_tail =
+        tail_statement != nullptr && tail_statement->kind == frontend::StmtKind::Expression &&
+        tail_statement->expression &&
+        tail_statement->expression.value <= snapshot.expressions().size() &&
+        snapshot.expressions()[tail_statement->expression.value - 1U].kind ==
+            frontend::ExprKind::Assign;
+    if (discardable_tail || assignment_tail) {
+        recordInferredReturn(void_type, {}, tail_statement->span);
+    } else if (tail_statement == nullptr || !tail_statement->hasSemicolon) {
+        if (type_table.kindOf(resolve(body_type)) != TypeKind::Error && body_type != void_type &&
+            type_table.kindOf(resolve(body_type)) != TypeKind::Never) {
+            recordInferredReturn(body_type, decl.body, decl.span);
+        }
+    }
+
+    TypeId inferred = void_type;
+    if (inferredReturnConflict_ || type_table.kindOf(resolve(body_type)) == TypeKind::Error) {
+        inferred = error_type;
+    } else if (hasInferredReturnCandidate_) {
+        inferred = inferredReturnCandidate_;
+    }
+    if (inferredReturnConflict_) {
+        report(inferredReturnConflictSpan_,
+               "return expressions do not agree on an inferred return type",
+               diagnostics::err::TypeMismatch);
+    }
+    const TypeKind inferred_kind = type_table.kindOf(resolve(inferred));
+    if (inferred_kind == TypeKind::Union || inferred_kind == TypeKind::Dyn ||
+        inferred_kind == TypeKind::Sum) {
+        report(decl.span, "cannot infer a union or dyn return type; add an explicit return type",
+               diagnostics::err::CannotInfer);
+        inferred = error_type;
+    }
+
+    auto &params = type_table.makeTypeStorage();
+    for (const auto param : declared_function->params)
+        params.push(param);
+    setDeclType(decl.id, type_table.internFunction(params, inferred));
+
+    inferringReturnType_        = false;
+    inferredReturnCandidate_    = kInvalidTypeId;
+    hasInferredReturnCandidate_ = false;
+    inferredReturnConflict_     = false;
+    currentReturnType_          = inferred;
+    currentBodyScope_           = {};
+    currentDeclId_              = 0U;
+    currentFunctionKind_        = frontend::FunctionKind::Standard;
+}
+
+void PerModuleSema::recordInferredReturn(const TypeId type, const frontend::ExprId source,
+                                         const frontend::TextSpan span) {
+    if (!type || type_table.kindOf(resolve(type)) == TypeKind::Error ||
+        type_table.kindOf(resolve(type)) == TypeKind::Never)
+        return;
+    if (!hasInferredReturnCandidate_) {
+        inferredReturnCandidate_    = type;
+        hasInferredReturnCandidate_ = true;
+        return;
+    }
+    if (sameType(inferredReturnCandidate_, type))
+        return;
+    if (source && coerceValue(source, inferredReturnCandidate_, type))
+        return;
+    if (!inferredReturnConflict_)
+        inferredReturnConflictSpan_ = span;
+    inferredReturnConflict_  = true;
+    inferredReturnCandidate_ = error_type;
+}
+
 void PerModuleSema::checkReturnsAndCalls() {
     for (const auto &decl : snapshot.declarations()) {
         if (decl.kind != frontend::DeclKind::Function)
@@ -200,7 +344,8 @@ void PerModuleSema::checkExpressionStatement(const frontend::Statement &stmt,
     if (calleeIsDiscardable(stmt.expression))
         return;
     const TypeId call_type = resolve(typeOfExpr(stmt.expression));
-    if (call_type != void_type && call_type != error_type && !produces_block_value) {
+    if (call_type != void_type && type_table.kindOf(call_type) != TypeKind::Error &&
+        !produces_block_value) {
         report(stmt.span, "call result must be used or discarded with `_ = call();`",
                diagnostics::err::DiscardedResult);
     }
@@ -459,9 +604,12 @@ TypeId PerModuleSema::inferBlock(frontend::ExprId id) {
                 snapshot.declarations()[currentDeclId_ - 1U].body == id &&
                 snapshot.declarations()[currentDeclId_ - 1U].kind == frontend::DeclKind::Function;
             const bool block_produces_value =
-                final_expr && (is_macro_expansion || (function_tail_has_value && !inStateBody_ &&
-                                                      currentReturnType_ != void_type));
+                final_expr && !stmt.hasSemicolon &&
+                (is_macro_expansion ||
+                 (function_tail_has_value && !inStateBody_ && currentReturnType_ != void_type));
             checkExpressionStatement(stmt, block_produces_value);
+            if (stmt.hasSemicolon)
+                last = void_type;
         } else if (stmt.kind == frontend::StmtKind::Defer) {
             pending_defers.push_back(stmt_id);
             last = void_type;

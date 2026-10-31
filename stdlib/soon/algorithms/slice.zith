@@ -1,0 +1,30 @@
+/// Returns the first index of `needle`, or null when it is absent.
+pub fn findIndexI32(values: []i32, needle: i32): ?u64 {
+    let length = @lengthOf(values);
+    var index: u64 = 0u64;
+    for (index < length) {
+        let value: i32 = must values[index];
+        if (value == needle) {
+            return index;
+        }
+        index = index + 1u64;
+    }
+    return null;
+}
+
+
+
+/// Counts the elements equal to `needle`.
+pub fn countI32(values: []i32, needle: i32): u64 {
+    let length = @lengthOf(values);
+    var index: u64 = 0u64;
+    var matches: u64 = 0u64;
+    for (index < length) {
+        let value: i32 = must values[index];
+        if (value == needle) {
+            matches = matches + 1u64;
+        }
+        index = index + 1u64;
+    }
+    return matches;
+}

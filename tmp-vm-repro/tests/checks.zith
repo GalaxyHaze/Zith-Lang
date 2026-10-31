@@ -1,0 +1,37 @@
+from std/test
+
+#[test]
+fn accumulated_checks() {
+    @check(true);
+    @check(false);
+    @check(false);
+    @log("continued after checks");
+}
+
+#[test]
+fn check_helpers_accumulate() {
+    @checkEq(2, 3);
+    @checkTrue(false);
+    @log("continued after helper checks");
+}
+
+#[test]
+fn assert_remains_fail_fast() {
+    @assert(false);
+    @log("after assert must not run");
+    @check(false);
+}
+
+#[test]
+fn check_helpers_pass() {
+    @log("\x1eZITH-TEST-CHECK-FAIL:checks::check_helpers_pass 1");
+    @checkTrue(true);
+    @checkEq(3, 3);
+}
+
+#[test]
+fn check_before_assert_reports_both() {
+    @check(false);
+    @assert(false);
+    @log("after later assert must not run");
+}

@@ -104,6 +104,25 @@ void test_pipeline_error_surfaces_diagnostic() {
           "failed pipeline still materializes the frontend snapshot");
 }
 
+void test_inferred_return_type_is_available_to_earlier_callers() {
+    Workspace workspace;
+    workspace.write("main.zith", "fn main(): i32 {\n"
+                                 "    add(20, 22)\n"
+                                 "}\n"
+                                 "fn add(a: i32, b: i32) {\n"
+                                 "    a + b\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "caller can use the inferred return type of a later declaration");
+}
+
 void test_pipeline_discard_non_void_call_result() {
     Workspace workspace;
     workspace.write("bad.zith", "fn make(): i32 { return 1; }\n"
@@ -224,7 +243,25 @@ void test_imported_console_void_main_discardable() {
     session::CompilationSession session(options, (workspace.root / "main.zith").string(),
                                         context);
     session.setBuffered(true);
-    CHECK(session.runTo(session::Stage::HirLowered),
+    const bool lowered = session.runTo(session::Stage::HirLowered);
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.severity != diagnostics::Severity::Error)
+            continue;
+        std::string module_name = "<unknown>";
+        if (session.snapshot()) {
+            for (const auto &module : session.snapshot()->modules()) {
+                if (module && module->fileId == diagnostic.primary.file) {
+                    module_name = module->key;
+                    break;
+                }
+            }
+        }
+        const std::string message =
+            module_name + ":" + std::to_string(diagnostic.primary.start) + ": " +
+            diagnostic.message;
+        CHECK(false, message.c_str());
+    }
+    CHECK(lowered,
           "discardable imported println used as the last statement of a void main lowers");
 }
 
@@ -318,13 +355,102 @@ void test_typed_uninitialized_binding_use_before_assignment_fails() {
           "typed binding read before assignment reports the initialization error");
 }
 
-void test_void_function_rejects_value_tail() {
+void test_inferred_return_type_from_value_tail() {
     Workspace workspace;
-    workspace.write("bad.zith", "fn foo() {\n"
-                                "    5\n"
+    workspace.write("main.zith", "fn foo() {\n"
+                                 "    5\n"
+                                 "}\n"
+                                 "fn main(): i32 {\n"
+                                 "    foo()\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "value tail infers a non-void function return type");
+}
+
+void test_inferred_return_type_ignores_terminated_assignment_tail() {
+    Workspace workspace;
+    workspace.write("main.zith", "fn clear(var value: i32) {\n"
+                                 "    value = 0;\n"
+                                 "}\n"
+                                 "fn main(): i32 {\n"
+                                 "    clear(1);\n"
+                                 "    return 0;\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::TypeChecked;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::TypeChecked),
+          "a semicolon-terminated assignment tail infers void");
+}
+
+void test_inferred_return_type_from_explicit_returns() {
+    Workspace workspace;
+    workspace.write("main.zith", "fn choose(flag: bool) {\n"
+                                 "    if (flag) { return 17; }\n"
+                                 "    return 23;\n"
+                                 "}\n"
+                                 "fn main(): i32 {\n"
+                                 "    choose(true)\n"
+                                 "}\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "main.zith").string());
+    session.setBuffered(true);
+    CHECK(session.runTo(session::Stage::HirLowered),
+          "return statements infer a type used by callers");
+}
+
+void test_inferred_return_type_rejects_direct_recursion() {
+    Workspace workspace;
+    workspace.write("bad.zith", "fn recurse(n: i32) {\n"
+                                "    if (n == 0) { return 0; }\n"
+                                "    recurse(n - 1)\n"
                                 "}\n"
-                                "fn main() {\n"
-                                "    return;\n"
+                                "fn main(): i32 { recurse(1) }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "bad.zith").string());
+    session.setBuffered(true);
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "direct recursion requires an explicit return type");
+
+    bool saw_recursive_inference_error = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.code == diagnostics::err::CannotInfer &&
+            diagnostic.message.find("recursive call cycle") != std::string::npos)
+            saw_recursive_inference_error = true;
+    }
+    CHECK(saw_recursive_inference_error,
+          "direct recursive inference reports CannotInfer at the function declaration");
+}
+
+void test_inferred_return_type_rejects_method_recursion() {
+    Workspace workspace;
+    workspace.write("bad.zith", "struct Counter { value: i32 }\n"
+                                "implement Counter {\n"
+                                "    fn recurse(self) { self.recurse() }\n"
+                                "}\n"
+                                "fn main(): i32 {\n"
+                                "    let counter = Counter{ value: 0 };\n"
+                                "    counter.recurse();\n"
+                                "    return 0;\n"
                                 "}\n");
 
     memory::Arena arena;
@@ -334,14 +460,71 @@ void test_void_function_rejects_value_tail() {
     session::CompilationSession session(options, (workspace.root / "bad.zith").string());
     session.setBuffered(true);
     CHECK(!session.runTo(session::Stage::HirLowered),
-          "void function with a trailing non-void value fails sema");
+          "method recursion requires an explicit return type");
 
-    bool saw_discarded_result = false;
+    bool saw_recursive_inference_error = false;
     for (const auto &diagnostic : session.diags().all()) {
-        if (diagnostic.code == diagnostics::err::DiscardedResult)
-            saw_discarded_result = true;
+        if (diagnostic.code == diagnostics::err::CannotInfer &&
+            diagnostic.message.find("recursive call cycle") != std::string::npos)
+            saw_recursive_inference_error = true;
     }
-    CHECK(saw_discarded_result, "void function trailing non-void value reports DiscardedResult");
+    CHECK(saw_recursive_inference_error,
+          "recursive method inference reports CannotInfer at the declaration");
+}
+
+void test_inferred_return_type_rejects_indirect_recursion() {
+    Workspace workspace;
+    workspace.write("bad.zith", "fn first(n: i32) {\n"
+                                "    if (n == 0) { return 0; }\n"
+                                "    second(n - 1)\n"
+                                "}\n"
+                                "fn second(n: i32) { first(n) }\n"
+                                "fn main(): i32 { first(1) }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "bad.zith").string());
+    session.setBuffered(true);
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "indirect recursion requires explicit return types");
+
+    size_t recursive_inference_errors = 0;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.code == diagnostics::err::CannotInfer &&
+            diagnostic.message.find("recursive call cycle") != std::string::npos)
+            ++recursive_inference_errors;
+    }
+    CHECK_EQ(recursive_inference_errors, 2u,
+             "every inferred function in an indirect cycle reports CannotInfer");
+}
+
+void test_inferred_return_type_rejects_incompatible_returns() {
+    Workspace workspace;
+    workspace.write("bad.zith", "fn choose(flag: bool) {\n"
+                                "    if (flag) { return 1; }\n"
+                                "    return true;\n"
+                                "}\n"
+                                "fn main(): i32 { choose(true) }\n");
+
+    memory::Arena arena;
+    Options options(arena);
+    options.targetStage = session::Stage::HirLowered;
+
+    session::CompilationSession session(options, (workspace.root / "bad.zith").string());
+    session.setBuffered(true);
+    CHECK(!session.runTo(session::Stage::HirLowered),
+          "incompatible explicit returns fail inferred return analysis");
+
+    bool saw_incompatible_returns = false;
+    for (const auto &diagnostic : session.diags().all()) {
+        if (diagnostic.code == diagnostics::err::TypeMismatch &&
+            diagnostic.message.find("return expressions do not agree") != std::string::npos)
+            saw_incompatible_returns = true;
+    }
+    CHECK(saw_incompatible_returns,
+          "incompatible inferred returns report a type mismatch after provisional analysis");
 }
 
 void test_pipeline_multifile_module_dependency() {
@@ -1266,6 +1449,7 @@ static void test_frontend_modern_pipeline() {
     test_default_session_uses_modern_pipeline();
     test_shared_context_reuses_frontend_cache();
     test_pipeline_error_surfaces_diagnostic();
+    test_inferred_return_type_is_available_to_earlier_callers();
     test_pipeline_discard_non_void_call_result();
     test_pipeline_discardable_attribute_allows_call();
     test_pipeline_unknown_attribute_warns_and_targets_are_checked();
@@ -1274,7 +1458,13 @@ static void test_frontend_modern_pipeline() {
     test_typed_uninitialized_binding_with_later_assignment_lowers();
     test_typed_uninitialized_unused_binding_lowers();
     test_typed_uninitialized_binding_use_before_assignment_fails();
-    test_void_function_rejects_value_tail();
+    test_inferred_return_type_from_value_tail();
+    test_inferred_return_type_ignores_terminated_assignment_tail();
+    test_inferred_return_type_from_explicit_returns();
+    test_inferred_return_type_rejects_direct_recursion();
+    test_inferred_return_type_rejects_method_recursion();
+    test_inferred_return_type_rejects_indirect_recursion();
+    test_inferred_return_type_rejects_incompatible_returns();
     test_pipeline_multifile_module_dependency();
     test_pipeline_export_platform_import();
     test_pipeline_export_shared_prefix();

@@ -1,0 +1,11 @@
+/// C standard library math bindings.
+pub extern fn sin(x: f64): f64
+pub extern fn cos(x: f64): f64
+pub extern fn tan(x: f64): f64
+pub extern fn asin(x: f64): f64
+pub extern fn acos(x: f64): f64
+pub extern fn atan(x: f64): f64
+pub extern fn atan2(y: f64, x: f64): f64
+pub extern fn hypot(x: f64, y: f64): f64
+pub extern fn sqrt(x: f64): f64
+pub extern fn fabs(x: f64): f64

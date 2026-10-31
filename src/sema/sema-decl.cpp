@@ -254,8 +254,14 @@ void PerModuleSema::lowerDeclarationTypes() {
             // with, so `Type.foo()` resolves to a zero-parameter signature.
             // Only an actual `self` parameter receives the owner pointer type.
             TypeId result = lowerTypeExpr(decl.declaredType);
-            if (!result)
-                result = void_type;
+            if (!result) {
+                const bool inferred_return =
+                    decl.body && !decl.isExtern &&
+                    decl.functionKind != frontend::FunctionKind::State &&
+                    decl.functionKind != frontend::FunctionKind::Const &&
+                    decl.functionKind != frontend::FunctionKind::Extern;
+                result = inferred_return ? error_type : void_type;
+            }
             TypeId fn_type = type_table.internFunction(params_storage, result);
             setDeclType(decl.id, fn_type);
             break;

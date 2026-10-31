@@ -1,8 +1,11 @@
 # `soon/` Modules And The Stdlib Module Guard
 
 `stdlib/soon/` holds experimental modules that may move to `std/` after the
-promotion gate in `docs/plans/stdlib/soon-promotion.md`. Two modules ship
-today: `soon/string.zith` (owning byte string) and `soon/json.zith` (a stub).
+promotion gate in `docs/plans/stdlib/soon-promotion.md`. Current entries are
+`soon/string.zith` (owning byte string), `soon/json.zith` (a stub),
+`soon/result/fallback.zith` (checked Result fallback helpers), and
+`soon/math/scalar.zith` (integer bounds and angle conversions), and
+`soon/algorithms/slice.zith` (allocation-free generic slice search and counting).
 
 ## Module Guard Test
 
@@ -39,6 +42,15 @@ test()`.
 
 - The extraction path for a union is `raw value as Member`; direct
   construction is `Result<A, B>{ value }`.
+- `soon/result/fallback` builds on `std/result` and adds checked
+  `unwrapOr`/`unwrapErrOr`; it does not duplicate `Result<T, E>`.
+- `soon/math/scalar` is allocator-free and provides `minI32`, `maxI32`,
+  `clampI32`, `degreesToRadians`, and `radiansToDegrees`.
+- `soon/algorithms/slice` provides allocator-free `findIndexI32` and
+  `countI32` over pointer-plus-length slices. Zith currently rejects equality
+  on generic type parameters and also fails to type-check a function-valued
+  equality callback in this generic call path, so the first algorithms stay
+  concretely typed until those compiler paths are supported.
 - `soon/` is not on the default include path. Tests and users need
   `--include stdlib` (CLI) or `opts.includeDirs.push(ZITH_STDLIB_DIR)`.
 - The promotion gate wants one contract test per promise id, native + VM v2

@@ -160,6 +160,7 @@ struct PerModuleSema {
     bool run();
     bool prepareTypes();
     bool checkExpressions();
+    void resetProvisionalInferenceResults();
     bool hasErrors() const noexcept;
 
     TypeId typeOfExpr(frontend::ExprId id) const noexcept;
@@ -187,6 +188,11 @@ private:
     void lowerDeclarationTypes();
     void inferExpressionTypes();
     void inferExpressionTypesForDecls();
+    void prepareStateMachineGrouping();
+    void probeFunctionCallTargets(const frontend::Declaration &decl);
+    void inferFunctionReturnType(const frontend::Declaration &decl);
+    void recordInferredReturn(TypeId type, frontend::ExprId source,
+                              frontend::TextSpan span);
     void checkReturnsAndCalls();
     void checkStructFieldDefaults();
     void checkFunctionDefaults();
@@ -211,6 +217,14 @@ private:
     /// Local ids whose uninitialized `let` was typed by its first assignment.
     std::vector<uint32_t> typeInferredByAssignment_;
     TypeId currentReturnType_ = kInvalidTypeId;
+    /// Return inference is active while an unannotated function body is
+    /// visited before the normal expression sweep.
+    bool inferringReturnType_ = false;
+    bool suppressDiagnostics_ = false;
+    TypeId inferredReturnCandidate_ = kInvalidTypeId;
+    bool hasInferredReturnCandidate_ = false;
+    bool inferredReturnConflict_ = false;
+    frontend::TextSpan inferredReturnConflictSpan_{};
     /// Expected result type for the next expression inferred in a context that
     /// has a known target type (a binding annotation, a declared return type,
     /// or a typed call argument). It feeds contextual generic inference so a
@@ -817,6 +831,7 @@ public:
     TypedMap &typedMap(session::ModuleKey module) noexcept;
 
 private:
+    bool inferFunctionReturnTypes();
     memory::Arena &arena_;
     diagnostics::DiagnosticEngine &diags_;
     const session::CompilationSnapshot &snapshot_;

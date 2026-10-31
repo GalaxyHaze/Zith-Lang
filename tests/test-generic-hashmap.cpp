@@ -1,7 +1,9 @@
 #include "diagnostics/error-codes.hpp"
+#include "hir/hir-expr.hpp"
 #include "session/compilation-session.hpp"
 #include "session/frontend-context.hpp"
 #include "test-common.hpp"
+#include "types/type-kind.hpp"
 
 #include <filesystem>
 #include <fstream>
@@ -150,6 +152,40 @@ void test_imported_generic_call_with_explicit_self_lowers() {
     CHECK(ok, "imported generic calls with an explicit self argument lower to HIR");
 }
 
+void test_generic_inferred_return_ignores_assignment_tail() {
+    SessionRunner t;
+    const bool ok =
+        t.run("fn mutate<T>(var value: T) {\n"
+              "    value = value;\n"
+              "}\n"
+              "fn main(): i32 {\n"
+              "    var number: i32 = 7;\n"
+              "    mutate<i32>(number);\n"
+              "    return 0;\n"
+              "}\n",
+              session::Stage::HirLowered, [](const session::CompilationSession &result) {
+                  bool found_void_instance = false;
+                  for (size_t index = 0; index < result.hirModule().getFnCount(); ++index) {
+                      const auto &function = result.hirModule().getFn(index);
+                      const auto name      = result.interner().lookup(function.name);
+                      if (name.find("mutate") != std::string_view::npos &&
+                          result.types().kindOf(function.return_type) == types::TypeKind::Void) {
+                          if (function.blocks.empty())
+                              continue;
+                          const auto terminator = function.blocks.back().terminator;
+                          if (terminator == hir::kInvalidHirExpr)
+                              continue;
+                          const auto *ret =
+                              std::get_if<hir::HirRet>(&result.hirModule().getExpr(terminator));
+                          found_void_instance =
+                              ret != nullptr && ret->value == hir::kInvalidHirExpr;
+                      }
+                  }
+                  return found_void_instance;
+              });
+    CHECK(ok, "a generic assignment statement infers and lowers a valueless return");
+}
+
 void test_explicit_generic_arguments_still_validate_runtime_arguments() {
     SessionRunner t;
     const bool ok = t.run("fn echo<T>(value: T): T { return value; }\n"
@@ -248,6 +284,7 @@ void test_generic_hashmap() {
     test_imported_generic_functions_resolve_explicit_arguments();
     test_imported_generic_layout_intrinsic_lowers_with_module_context();
     test_imported_generic_call_with_explicit_self_lowers();
+    test_generic_inferred_return_ignores_assignment_tail();
     test_explicit_generic_arguments_still_validate_runtime_arguments();
     test_hashmap_stdlib_checks();
     test_inplace_trait_passes_check();

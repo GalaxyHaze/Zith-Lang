@@ -1,0 +1,69 @@
+import std/math as m
+
+pub struct Vec2 { pub x: f64 = 0.0, pub y: f64 = 0.0 }
+
+pub struct Vec3 { pub x: f64 = 0.0, pub y: f64 = 0.0, pub z: f64 = 0.0 }
+
+pub struct Vec4 { pub x: f64 = 0.0, pub y: f64 = 0.0, pub z: f64 = 0.0, pub w: f64 = 0.0 }
+
+pub fn vec2(x: f64, y: f64): Vec2 { Vec2 { x, y } }
+pub fn vec3(x: f64, y: f64, z: f64): Vec3 { Vec3 { x, y, z } }
+pub fn vec4(x: f64, y: f64, z: f64, w: f64): Vec4 { Vec4 { x, y, z, w } }
+
+implement Vec2 {
+    pub fn init(x: f64, y: f64): Self { Vec2 { x, y } }
+
+    pub fn add(self: view Vec2, other: view Vec2): Self { Vec2 { x: self.x + other.x, y: self.y + other.y } }
+    pub fn sub(self: view Vec2, other: view Vec2): Self { Vec2 { x: self.x - other.x, y: self.y - other.y } }
+    pub fn scale(self: view Vec2, s: f64): Self { Vec2 { x: self.x * s, y: self.y * s } }
+
+    pub fn length(self: view Vec2): f64 { m.hypot(self.x, self.y) }
+    pub fn normalize(self: view Vec2): Self {
+        let len = self.length();
+        if (len == 0.0) { return Vec2 { 0.0, 0.0 }; }
+        return self.scale(1.0 / len);
+    }
+
+    pub fn dot(self: view Vec2, other: view Vec2): f64 { self.x * other.x + self.y * other.y }
+
+    /// Returns a vector rotated by `angle` in radians.
+    pub fn rotate(self: view Vec2, angle: f64): Self {
+        let c = m.cos(angle);
+        let s = m.sin(angle);
+        Vec2 { x: self.x * c - self.y * s, y: self.x * s + self.y * c }
+    }
+}
+
+implement Vec3 {
+    pub fn init(x: f64, y: f64, z: f64): Self { Vec3 { x, y, z } }
+
+    pub fn add(self: view Vec3, other: view Vec3): Self { Vec3 { x: self.x + other.x, y: self.y + other.y, z: self.z + other.z } }
+    pub fn sub(self: view Vec3, other: view Vec3): Self { Vec3 { x: self.x - other.x, y: self.y - other.y, z: self.z - other.z } }
+    pub fn scale(self: view Vec3, s: f64): Self { Vec3 { x: self.x * s, y: self.y * s, z: self.z * s } }
+
+    pub fn length(self: view Vec3): f64 { m.hypot(self.x, m.hypot(self.y, self.z)) }
+    pub fn normalize(self: view Vec3): Self {
+        let len = self.length();
+        if (len == 0.0) { return Vec3 { 0.0, 0.0, 0.0 }; }
+        return self.scale(1.0 / len);
+    }
+
+    pub fn dot(self: view Vec3, other: view Vec3): f64 { self.x * other.x + self.y * other.y + self.z * other.z }
+    pub fn cross(self: view Vec3, other: view Vec3): Self {
+        Vec3 {
+            x: self.y * other.z - self.z * other.y,
+            y: self.z * other.x - self.x * other.z,
+            z: self.x * other.y - self.y * other.x,
+        }
+    }
+}
+
+implement Vec4 {
+    pub fn init(x: f64, y: f64, z: f64, w: f64): Self { Vec4 { x, y, z, w } }
+
+    pub fn add(self: view Vec4, other: view Vec4): Self { Vec4 { x: self.x + other.x, y: self.y + other.y, z: self.z + other.z, w: self.w + other.w } }
+    pub fn sub(self: view Vec4, other: view Vec4): Self { Vec4 { x: self.x - other.x, y: self.y - other.y, z: self.z - other.z, w: self.w - other.w } }
+    pub fn scale(self: view Vec4, s: f64): Self { Vec4 { x: self.x * s, y: self.y * s, z: self.z * s, w: self.w * s } }
+
+    pub fn dot(self: view Vec4, other: view Vec4): f64 { self.x * other.x + self.y * other.y + self.z * other.z + self.w * other.w }
+}

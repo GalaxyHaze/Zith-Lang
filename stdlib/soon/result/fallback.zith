@@ -1,0 +1,17 @@
+import std/result as result
+
+/// Returns the success value, or `fallback` when `r` contains an error.
+pub fn unwrapOr<T, E>(r: result.Result<T, E>, fallback: T): T {
+    if (result.isOk(r)) {
+        return result.unwrap(r);
+    }
+    return fallback;
+}
+
+/// Returns the error value, or `fallback` when `r` contains a success.
+pub fn unwrapErrOr<T, E>(r: result.Result<T, E>, fallback: E): E {
+    if (result.isErr(r)) {
+        return result.unwrapErr(r);
+    }
+    return fallback;
+}

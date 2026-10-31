@@ -1,0 +1,5 @@
+#[test]
+fn pass() {
+    @log("\x1eZITH-TEST-CHECK-FAIL:checklog::pass 1");
+    @check(true);
+}

@@ -19,10 +19,14 @@ Size: system, the standard-library delivery surface.
 |---|---|---|---|
 | string | `stdlib/soon/string.zith` | implemented, type-checked, no signed promises | owning byte string |
 | json | `stdlib/soon/json.zith` | stub | parse, stringify, isValid |
+| result/fallback | `stdlib/soon/result/fallback.zith` | implemented, native-tested, VM v2 and promise tests pending | `Result` fallback access |
+| math/scalar | `stdlib/soon/math/scalar.zith` | implemented, native-tested, VM v2 and promise tests pending | integer bounds and angle conversion |
+| algorithms/slice | `stdlib/soon/algorithms/slice.zith` | implemented, native-tested, VM v2 and promise tests pending | `i32` slice search and counting |
 
-Both modules are covered by `test-stdlib-modules`, which type-checks every
-`stdlib/**.zith` in isolation. The `string` module still lacks the per-promise
-contract tests the gate below requires.
+`test-stdlib-modules` type-checks every `stdlib/**.zith` in isolation.
+The `string` module still lacks the per-promise contract tests the gate below
+requires. The Result, math, and slice helpers have native runtime coverage, but
+they are not ready for promotion until they also meet the full gate.
 
 The stable `std/` surface is not in scope here. The allocator-ownership and
 collections drawings under `docs/plans/stdlib/` cover the `std/` side.

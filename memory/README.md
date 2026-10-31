@@ -94,6 +94,8 @@ contracts, decisions, and gotchas that are not discoverable from the source alon
   Linux-only `c/posix` platform variant, with the `raw opaque` and
   duplicate-`SEEK_*` gotchas and the deferred safe `std/fs` blockers.
 - [stdlib-soon-modules.md](stdlib-soon-modules.md): the `soon/` modules, the
+  `soon/result/fallback`, `soon/math/scalar`, and
+  `soon/algorithms/slice` experiments, the
   `test-stdlib-modules` guard that type-checks every `stdlib/**.zith`, and the
   `return expr;` / narrowing gotchas that broke `soon/string.zith`.
 - [stdlib-imported-generics.md](stdlib-imported-generics.md): imported generic

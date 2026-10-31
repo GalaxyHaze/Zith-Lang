@@ -324,6 +324,8 @@ struct Statement {
     /// Arguments written after `jump target(args);`.
     std::vector<ExprId> arguments;
     std::vector<Attribute> attributes;
+    /// True when the source statement was explicitly terminated with `;`.
+    bool hasSemicolon = false;
 };
 
 struct Expression {

@@ -1,0 +1,41 @@
+import std/math as baseMath
+
+/// Returns the smaller of two signed 32-bit integers.
+pub fn minI32(left: i32, right: i32): i32 {
+    if (left < right) {
+        return left;
+    }
+    return right;
+}
+
+/// Returns the larger of two signed 32-bit integers.
+pub fn maxI32(left: i32, right: i32): i32 {
+    if (left > right) {
+        return left;
+    }
+    return right;
+}
+
+/// Clamps `value` to the inclusive range formed by `lower` and `upper`.
+/// Reversed bounds are accepted and treated as if they were swapped.
+pub fn clampI32(value: i32, lower: i32, upper: i32): i32 {
+    let low = minI32(lower, upper);
+    let high = maxI32(lower, upper);
+    if (value < low) {
+        return low;
+    }
+    if (value > high) {
+        return high;
+    }
+    return value;
+}
+
+/// Converts degrees to radians using `std/math.pi`.
+pub fn degreesToRadians(degrees: f64): f64 {
+    return degrees * baseMath.pi / 180.0;
+}
+
+/// Converts radians to degrees using `std/math.pi`.
+pub fn radiansToDegrees(radians: f64): f64 {
+    return radians * 180.0 / baseMath.pi;
+}

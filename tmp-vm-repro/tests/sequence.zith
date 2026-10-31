@@ -1,0 +1,16 @@
+from std/test
+
+#[test]
+fn one_of_fails() {
+    let missing: i32 = 4;
+    let values: [3]i32 = [1, 3, 5];
+    @assertOneOf(missing, values);
+}
+
+#[test]
+fn optional_passes() {
+    let present: ?i32 = 42;
+    let absent: ?i32 = null;
+    @assertSome(present);
+    @assertNone(absent);
+}

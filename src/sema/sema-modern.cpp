@@ -14,6 +14,8 @@
 #include <cstdlib>
 #include <limits>
 #include <string>
+#include <utility>
+#include <unordered_map>
 
 namespace zith::sema::modern {
 
@@ -53,6 +55,169 @@ bool PerModuleSema::checkExpressions() {
     checkZithDeclarations();
     checkReturnsAndCalls();
     return !hasErrors();
+}
+
+void PerModuleSema::resetProvisionalInferenceResults() {
+    typed_map.exprTypes.clear();
+    typed_map.forInRangeLiteral.clear();
+    typed_map.forInNext.clear();
+    typed_map.containsCall.clear();
+    typed_map.forInElementIndex.clear();
+    typed_map.forInEndIndex.clear();
+    typed_map.forInUnionType.clear();
+    typed_map.forInOptionalType.clear();
+    typed_map.traitQualifiedReceiverBase.clear();
+    typed_map.opaqueSourceTypes.clear();
+    typed_map.dynSourceTypes.clear();
+    typed_map.provenNonNullExprs.clear();
+    typed_map.provenNonNullOptionalExprs.clear();
+    typed_map.optionalPayloadReads.clear();
+    typed_map.variadicCallPlans.clear();
+    typed_map.variadicStmtPlans.clear();
+    call_targets_.clear();
+}
+
+bool SemaPipeline::inferFunctionReturnTypes() {
+    struct FunctionNode {
+        PerModuleSema *sema = nullptr;
+        const frontend::Declaration *decl = nullptr;
+        std::vector<size_t> callees;
+        bool inferReturn = false;
+        bool recursiveInference = false;
+    };
+
+    const auto keyFor = [](std::string_view module, uint32_t decl_id) {
+        std::string key(module);
+        key.push_back('\x1f');
+        key += std::to_string(decl_id);
+        return key;
+    };
+    const auto needsInference = [](const frontend::Declaration &decl) {
+        return decl.kind == frontend::DeclKind::Function && decl.body && !decl.declaredType &&
+               !decl.isExtern && decl.functionKind != frontend::FunctionKind::State &&
+               decl.functionKind != frontend::FunctionKind::Const &&
+               decl.functionKind != frontend::FunctionKind::Extern;
+    };
+
+    std::vector<FunctionNode> functions;
+    std::unordered_map<std::string, size_t> functionByKey;
+    struct LocalTypeSnapshot {
+        PerModuleSema *sema = nullptr;
+        memory::FlatMap<uint32_t, TypeId> localTypes;
+    };
+    std::vector<LocalTypeSnapshot> local_type_snapshots;
+    for (auto *sema : modules_) {
+        sema->prepareStateMachineGrouping();
+        sema->resetProvisionalInferenceResults();
+        local_type_snapshots.push_back({sema, sema->typed_map.localTypes});
+        for (const auto &decl : sema->snapshot.declarations()) {
+            if (decl.kind != frontend::DeclKind::Function || !decl.body || decl.isExtern)
+                continue;
+            const size_t index = functions.size();
+            functions.push_back(
+                FunctionNode{sema, &decl, {}, needsInference(decl), false});
+            functionByKey.emplace(keyFor(sema->module, decl.id.value), index);
+        }
+    }
+    for (auto *sema : modules_)
+        sema->resetProvisionalInferenceResults();
+    for (const auto &function : functions)
+        function.sema->probeFunctionCallTargets(*function.decl);
+
+    const auto collectCalls = [&](const FunctionNode &function, std::vector<size_t> &out) {
+        const auto &snapshot = function.sema->snapshot;
+        std::vector<uint8_t> visited(snapshot.expressions().size() + 1U, 0U);
+        std::function<void(frontend::ExprId)> walk = [&](const frontend::ExprId id) {
+            if (!id || id.value > snapshot.expressions().size() || visited[id.value] != 0U)
+                return;
+            visited[id.value] = 1U;
+            const auto &expr = snapshot.expressions()[id.value - 1U];
+            if (expr.kind == frontend::ExprKind::Call && !expr.operands.empty()) {
+                if (const auto *call_target =
+                        function.sema->resolvedCallTarget(expr.operands[0])) {
+                    const auto target = functionByKey.find(
+                        keyFor(call_target->module, call_target->decl.value));
+                    if (target != functionByKey.end())
+                        out.push_back(target->second);
+                } else if (const auto *resolved =
+                               function.sema->findResolvedExpr(expr.operands[0])) {
+                    auto target_module = resolved->target.module.empty()
+                                             ? function.sema->module
+                                             : resolved->target.module;
+                    frontend::DeclId target_decl = resolved->declaration;
+                    if (!target_decl && resolved->target.localSymbol)
+                        target_decl = frontend::DeclId{resolved->target.localSymbol.value};
+                    const auto target = functionByKey.find(keyFor(target_module,
+                                                                   target_decl.value));
+                    if (target_decl && target != functionByKey.end())
+                        out.push_back(target->second);
+                }
+            }
+            for (const auto operand : expr.operands)
+                walk(operand);
+            for (const auto condition : expr.conditions)
+                walk(condition);
+            if (expr.expansion)
+                walk(expr.expansion);
+            for (const auto stmt_id : expr.statements) {
+                if (!stmt_id || stmt_id.value > snapshot.statements().size())
+                    continue;
+                const auto &stmt = snapshot.statements()[stmt_id.value - 1U];
+                walk(stmt.expression);
+                walk(stmt.binding.initializer);
+                for (const auto argument : stmt.arguments)
+                    walk(argument);
+            }
+        };
+        walk(function.decl->body);
+        std::sort(out.begin(), out.end());
+        out.erase(std::unique(out.begin(), out.end()), out.end());
+    };
+    for (auto &function : functions)
+        collectCalls(function, function.callees);
+    for (auto &snapshot : local_type_snapshots) {
+        snapshot.sema->resetProvisionalInferenceResults();
+        snapshot.sema->typed_map.localTypes = std::move(snapshot.localTypes);
+    }
+
+    std::vector<uint8_t> visitState(functions.size(), 0U);
+    std::vector<size_t> stack;
+    std::function<void(size_t)> visit = [&](const size_t index) {
+        if (visitState[index] == 2U)
+            return;
+        if (visitState[index] == 1U)
+            return;
+        visitState[index] = 1U;
+        stack.push_back(index);
+        for (const size_t callee : functions[index].callees) {
+            if (visitState[callee] == 1U) {
+                const auto cycle = std::find(stack.begin(), stack.end(), callee);
+                for (auto member = cycle; member != stack.end(); ++member) {
+                    auto &recursive = functions[*member];
+                    if (recursive.inferReturn && !recursive.recursiveInference) {
+                        recursive.recursiveInference = true;
+                        recursive.sema->report(
+                            recursive.decl->span,
+                            "recursive call cycle requires an explicit return type for '" +
+                                recursive.decl->name + "'",
+                            diagnostics::err::CannotInfer);
+                    }
+                }
+            } else {
+                visit(callee);
+            }
+        }
+        stack.pop_back();
+        visitState[index] = 2U;
+        auto &function = functions[index];
+        if (function.inferReturn && !function.recursiveInference)
+            function.sema->inferFunctionReturnType(*function.decl);
+    };
+    for (size_t index = 0; index < functions.size(); ++index)
+        visit(index);
+
+    return std::none_of(modules_.begin(), modules_.end(),
+                        [](const PerModuleSema *sema) { return sema->hasErrors(); });
 }
 
 bool PerModuleSema::hasErrors() const noexcept {
@@ -99,15 +264,21 @@ void PerModuleSema::setLocalType(frontend::LocalId id, TypeId type) {
 }
 
 void PerModuleSema::report(frontend::TextSpan span, std::string message, uint32_t code) {
+    if (suppressDiagnostics_)
+        return;
     diagnostics.emplace(arena, span, std::move(message), diagnostics::Severity::Error, code);
 }
 
 void PerModuleSema::reportNote(frontend::TextSpan span, std::string message) {
+    if (suppressDiagnostics_)
+        return;
     diagnostics.emplace(arena, span, std::move(message), diagnostics::Severity::Note,
                         static_cast<uint32_t>(0));
 }
 
 void PerModuleSema::reportWarning(frontend::TextSpan span, std::string message, uint32_t code) {
+    if (suppressDiagnostics_)
+        return;
     diagnostics.emplace(arena, span, std::move(message), diagnostics::Severity::Warning, code);
 }
 
@@ -143,6 +314,11 @@ bool SemaPipeline::run() {
     for (auto *sema : modules_) {
         if (!sema->prepareTypes())
             has_errors_ = true;
+    }
+    if (!inferFunctionReturnTypes())
+        has_errors_ = true;
+    for (auto *sema : modules_) {
+        sema->resetProvisionalInferenceResults();
     }
     for (auto *sema : modules_) {
         if (!sema->checkExpressions())
