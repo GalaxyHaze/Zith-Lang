@@ -283,6 +283,10 @@ private:
     hir::HirExprId lowerExpr(frontend::ExprId id);
     hir::HirExprId lowerLiteral(const frontend::Expression &expr, types::TypeId type);
     hir::HirExprId lowerName(const frontend::Expression &expr);
+    /// Lowers a `fn (...) { ... }` literal to a reference to its synthesized
+    /// function. The function itself is predeclared and its body lowered with
+    /// the ordinary function path.
+    hir::HirExprId lowerFunctionLiteral(const frontend::Expression &expr);
     /// Address of an addressable frontend expression without loading its value.
     /// Returns kInvalidHirExpr for call results and other non-addressable values;
     /// callers spill those to a slot before taking their address.

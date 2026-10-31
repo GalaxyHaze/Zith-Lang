@@ -613,6 +613,30 @@ raw fn readByte(buffer: *u8, index: u64): u8 {
 }
 ```
 
+### Funções anónimas
+
+Uma função pode ser escrita em posição de expressão, sem nome, com a mesma
+cabeça de uma função nomeada menos o identificador: `fn (params): R { body }` ou
+`fn (params) { body }`. O valor resultante é uma função de primeira classe do
+tipo `fn(params): R`, equivalente a uma referência a uma função nomeada. Não há
+lista de captura: o literal não vê bindings locais do escopo onde aparece, apenas
+os seus próprios parâmetros e os símbolos de módulo.
+
+```zith
+fn apply(f: fn(i32, i32): i32, x: i32): i32 { f(x, x) }
+
+fn main(): i32 {
+    let add = fn (a: i32, b: i32): i32 { a + b };
+    let square = apply(fn (a: i32, b: i32): i32 { a * b }, 4);
+    return add(2, 3) + square;
+}
+```
+
+O literal baixa como uma função local sintetizada cujo endereço é tomado, por
+isso passa e chama-se pela ABI normal de function pointer. Referenciar um
+binding do escopo envolvente dentro do corpo é rejeitado como identificador
+desconhecido, não capturado.
+
 ### Intrinsics de slices, arrays, strings e layout
 
 `@lengthOf(x)` e `@ptrOf(x)` aceitam slices `[]T`, arrays `[N]T`, string literals e

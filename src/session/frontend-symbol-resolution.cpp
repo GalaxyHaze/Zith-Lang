@@ -294,20 +294,25 @@ FrontendContext::buildResolutions(const std::vector<ModuleArtifactPtr> &modules,
             if (declaration.kind != frontend::DeclKind::Function || !declaration.parentScope ||
                 declaration.name.empty())
                 continue;
-            ResolvedName local_state{
-                declaration.name,       ResolutionKind::Declaration,
-                declaration.span,       {module->key, frontend::SymbolId{declaration.id.value}},
-                declaration.id,         {},
-                declaration.parentScope};
-            local_state.declKind       = declaration.kind;
-            local_state.isExtern       = declaration.isExtern;
-            local_state.externalSymbol = declaration.externalSymbol;
-            local_state.isVariadic     = declaration.isVariadic;
-            local_state.isVariadicSlice =
-                !declaration.parameters.empty() && declaration.parameters.back().isVariadicSlice;
-            local_state.discardable = declaration.discardable();
-            local_state.signature = frontend::functionSignature(*module->frontend, declaration);
-            add_binding(std::move(local_state), declaration.parentScope);
+            // An anonymous function literal has a synthetic name that no source
+            // expression can spell, so it is never a visible binding. Its
+            // parameters still need to resolve inside its own body.
+            if (!declaration.isAnonymousFunction) {
+                ResolvedName local_state{
+                    declaration.name,       ResolutionKind::Declaration,
+                    declaration.span,       {module->key, frontend::SymbolId{declaration.id.value}},
+                    declaration.id,         {},
+                    declaration.parentScope};
+                local_state.declKind        = declaration.kind;
+                local_state.isExtern        = declaration.isExtern;
+                local_state.externalSymbol  = declaration.externalSymbol;
+                local_state.isVariadic      = declaration.isVariadic;
+                local_state.isVariadicSlice = !declaration.parameters.empty() &&
+                                              declaration.parameters.back().isVariadicSlice;
+                local_state.discardable     = declaration.discardable();
+                local_state.signature = frontend::functionSignature(*module->frontend, declaration);
+                add_binding(std::move(local_state), declaration.parentScope);
+            }
             if (declaration.body &&
                 declaration.body.value <= module->frontend->expressions().size()) {
                 const auto parameter_scope =

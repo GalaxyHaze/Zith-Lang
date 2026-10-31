@@ -1206,6 +1206,12 @@ void FmtVisitor::visitExpr(const frontend::ExprId id, const int parent_prec) {
     case frontend::ExprKind::MacroCall:
         emitOriginal(expr->span);
         break;
+    case frontend::ExprKind::FunctionLiteral:
+        // The literal is a `fn (...) { ... }` written in expression position;
+        // re-emit its original source so the synthesized declaration never
+        // leaks into the formatted output.
+        emitOriginal(expr->span);
+        break;
     case frontend::ExprKind::Error:
         emitOriginal(expr->span);
         break;
@@ -1225,6 +1231,10 @@ void FmtVisitor::format() {
         // inside the struct's emitted body, and an implement-block method is
         // re-emitted below under its `implement Owner { ... }` header.
         if (!decl.ownerName.empty())
+            continue;
+        // An anonymous function literal is emitted inline at its use site, not
+        // as a top-level declaration.
+        if (decl.isAnonymousFunction)
             continue;
         if (emitted_decl)
             blankLine();

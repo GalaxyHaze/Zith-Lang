@@ -81,6 +81,10 @@ private:
     [[nodiscard]] TypeExprId parseType();
     [[nodiscard]] ExprId parseCallArgument();
     [[nodiscard]] ExprId parsePrimary();
+    /// Parses `fn (params): R { body }` / `fn (params) { body }` in expression
+    /// position. The literal has no captures and lowers to a synthesized local
+    /// function whose address is the literal's value.
+    [[nodiscard]] ExprId parseFunctionLiteral();
     [[nodiscard]] bool isOperatorToken(std::string_view op) const noexcept;
     [[nodiscard]] bool isGenericApplication() const noexcept;
     [[nodiscard]] bool isKeywordToken(std::string_view word) const noexcept;
@@ -137,7 +141,8 @@ private:
                             const std::vector<GenericParam> &inheritedParams = {},
                             bool isRawUnion = false, bool suppressTopLevelBindingCheck = false,
                             ScopeId parentScope = {}, const std::string &parentName = {},
-                            const std::vector<Attribute> &attributes = {});
+                            const std::vector<Attribute> &attributes = {},
+                            bool anonymousFunction                   = false);
 
     bool parseStructField(std::vector<Parameter> &out);
     bool parseInterfaceField(std::vector<Parameter> &out);

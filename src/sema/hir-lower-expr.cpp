@@ -109,6 +109,8 @@ hir::HirExprId HirLowerModern::lowerExpr(frontend::ExprId id) {
             return lowerExpr(expr.expansion);
         return hir::kInvalidHirExpr;
     }
+    case frontend::ExprKind::FunctionLiteral:
+        return lowerFunctionLiteral(expr);
     case frontend::ExprKind::Return:
     case frontend::ExprKind::Placeholder:
     case frontend::ExprKind::Error:

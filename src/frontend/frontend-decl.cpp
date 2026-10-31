@@ -440,7 +440,8 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
                                     const std::vector<GenericParam> &inheritedParams,
                                     bool isRawUnion, bool suppressTopLevelBindingCheck,
                                     ScopeId parentScope, const std::string &parentName,
-                                    const std::vector<Attribute> &attributes) {
+                                    const std::vector<Attribute> &attributes,
+                                    bool anonymousFunction) {
     const std::string_view declaration_keyword = text(index_);
     Declaration declaration;
     declaration.id            = DeclId{static_cast<uint32_t>(snapshot_.declarations_.size() + 1U)};
@@ -456,6 +457,7 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
     declaration.parentScope   = parentScope;
     declaration.parentName    = parentName;
     declaration.attributes    = attributes;
+    declaration.isAnonymousFunction = anonymousFunction;
     const AttributeTarget attribute_target =
         kind == DeclKind::Function                             ? AttributeTarget::Function
         : kind == DeclKind::Variable                           ? AttributeTarget::Variable
@@ -472,7 +474,11 @@ DeclId AstLowerer::lowerDeclaration(uint32_t start, DeclKind kind, Visibility vi
              false, diagnostics::err::UnsupportedSyntax});
     }
     ++index_;
-    if (index_ < token_count_ && snapshot_.tokens_[index_].kind == TokenKind::Identifier) {
+    if (anonymousFunction) {
+        // An anonymous function literal has no source name. It gets a stable
+        // synthetic name so the HIR linkage name is deterministic.
+        declaration.name = "$anon" + std::to_string(declaration.id.value);
+    } else if (index_ < token_count_ && snapshot_.tokens_[index_].kind == TokenKind::Identifier) {
         if (kind == DeclKind::Variable)
             declaration.bindingKind = bindingKind(text(index_ - 1U));
         declaration.name = std::string(text(index_++));

@@ -217,6 +217,11 @@ enum class ExprKind : uint8_t {
     /// annotation is validated by sema and does not change the inner value's
     /// inferred type; lowering passes the operand by reference.
     OwnershipCoerce,
+    /// `fn (params): R { body }` written in expression position. The literal is
+    /// a no-capture function value: it lowers to a synthesized local function
+    /// whose address is taken, so the value is a plain function pointer. See
+    /// `declaration` for the synthesized function.
+    FunctionLiteral,
 };
 
 enum class StmtKind : uint8_t {
@@ -392,6 +397,9 @@ struct Expression {
     std::vector<ExprId> attributes;
     /// Used by ExprKind::OwnershipCoerce: the call-site ownership annotation.
     OwnershipKind ownership = OwnershipKind::Default;
+    /// Used by ExprKind::FunctionLiteral: the synthesized no-capture function
+    /// the literal evaluates to. Its address is the literal's value.
+    DeclId declaration;
 };
 
 struct Scope {
@@ -532,6 +540,11 @@ struct Declaration {
     /// Non-empty for `state` declarations written inside a function body. The
     /// binding lives in `parentScope`, not the module scope.
     ScopeId parentScope;
+    /// True for a function synthesized from an anonymous function literal
+    /// (`fn (...) { ... }`). The declaration has no source name and is not
+    /// registered as a module binding; the literal's expression references it
+    /// directly. It never participates in overload resolution.
+    bool isAnonymousFunction = false;
     /// Source name of the function whose body owns this local declaration. Used
     /// to qualify HIR linkage names so identical state names in different
     /// functions stay distinct.

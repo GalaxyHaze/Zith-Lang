@@ -132,6 +132,8 @@ namespace {
         return "PipeDo";
     case ExprKind::PipeCurrent:
         return "PipeCurrent";
+    case ExprKind::FunctionLiteral:
+        return "FunctionLiteral";
     case ExprKind::Error:
         return "Error";
     }

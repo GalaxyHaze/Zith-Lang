@@ -8,11 +8,39 @@
 
 namespace zith::frontend {
 
+ExprId AstLowerer::parseFunctionLiteral() {
+    const uint32_t start = index_;
+    // The literal is a no-capture function value. Parse its body in a scope
+    // whose parent is the module root, so an enclosing local is not visible:
+    // a reference to one is reported as an unknown identifier instead of
+    // silently producing a broken function that needs a closure environment.
+    const ScopeId literal_scope = current_scope_;
+    const ScopeId saved_scope   = current_scope_;
+    current_scope_              = root_scope_;
+    const DeclId decl = lowerDeclaration(start, DeclKind::Function, Visibility::Private, {}, {},
+                                         false, FunctionKind::Standard, {}, false, true,
+                                         literal_scope, current_local_parent_name_, {}, true);
+    current_scope_    = saved_scope;
+
+    Expression literal;
+    literal.kind        = ExprKind::FunctionLiteral;
+    literal.scope       = literal_scope;
+    literal.declaration = decl;
+    literal.span        = range(start, index_);
+    return parsePostfix(addExpression(std::move(literal)), start);
+}
+
 ExprId AstLowerer::parsePrimary() {
     if (index_ >= token_count_)
         return {};
 
     const uint32_t start = index_;
+    // `fn (params): R { body }` in expression position is a no-capture
+    // anonymous function literal. A `fn` in primary position is always the
+    // literal form: a declaration `fn` is consumed by the statement/declaration
+    // parser before an expression is ever attempted.
+    if (isKeywordToken("fn"))
+        return parseFunctionLiteral();
     if (in_pipe_stage_ && snapshot_.tokens_[index_].kind == TokenKind::Dots &&
         text(index_) == "..") {
         ++index_;

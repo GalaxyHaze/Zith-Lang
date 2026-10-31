@@ -167,6 +167,13 @@ TypeId PerModuleSema::inferExpr(frontend::ExprId id) {
         // binding fed by `@macro()` would take an invalid type.
         result = expr.expansion ? inferExpr(expr.expansion) : error_type;
         break;
+    case frontend::ExprKind::FunctionLiteral: {
+        // The literal's value is the synthesized function's address, so its
+        // type is exactly the function type of that declaration.
+        const TypeId fn_type = expr.declaration ? typeOfDecl(expr.declaration) : kInvalidTypeId;
+        result               = fn_type ? fn_type : error_type;
+        break;
+    }
     default:
         result = error_type;
         break;

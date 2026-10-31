@@ -47,6 +47,8 @@ O AST modela bindings com `BindingKind`:
 
 Qualificadores `mut`, `unique`, `share` e `belong` são parseados para recovery/formatter, mas emitem `E2010 UnsupportedSyntax`.
 
+`fn` em posição de expressão (`parseFunctionLiteral()` em `frontend-expr-primary.cpp`) é reconhecido como átomo primário antes do resto de `parsePrimary()`. O literal baixa como uma declaração `DeclKind::Function` sintetizada com `Declaration::isAnonymousFunction = true` e um nome `$anon<id>` que nenhuma expressão fonte consegue escrever. O parser troca o escopo corrente por `root_scope_` enquanto baixa a cabeça e o corpo, por isso o corpo não vê bindings locais do escopo envolvente: uma referência a esses bindings falha como `E2001 unknown identifier` em vez de ser capturada. A resolução de símbolos ignora o nome sintético (nunca cria um binding visível para ele) mas continua a registar os parâmetros dentro do corpo. O resultado é um `Expression` com `kind = ExprKind::FunctionLiteral` e `declaration` a apontar para a função sintetizada.
+
 O parser cria `ExprKind::OwnershipCoerce` apenas em listas de argumentos de call (`parseCallArgument()`), usado nas chamadas `f(...)`, `f<G>(...)`, dock e jump. Só `lend` e `view` são aceites como anotação de argumento; `unique`/`share`/`belong`/`mut` nessa posição reportam `E4007 InvalidCallOwnership`. Fora de um call argument, `lend`/`view` continuam a ser tratados como keywords normais e falham com o diagnóstico normal.
 
 `parseConditionExpression()` é usado em `if`, `while`, nas três cláusulas do `for` e nos grupos parentizados `for (cond)`. A função reconhece `not expr` e constrói `ExprKind::Unary` com texto `not` antes de `parseExpression()`. O token seguinte `)`/`,`/`{` interrompe o sugar, para que o parser não absorva o fecho ou separador da cláusula.
@@ -405,6 +407,8 @@ o tipo do objeto. O lowering usa esse endereço para leituras e, em `extern var`
 Declarações externas não referenciadas não criam acessos HIR.
 
 `HirLowerModern::lowerExpr` descarta `OwnershipCoerce` e baixa o inner. Em calls, um argumento anotado é baixado como endereço do place: `lowerLValueAddr` para bindings/campos/índices, ou uma alloca temporária quando o operand não tem lvalue. O parâmetro `*lend T`/`*view T` já é baixado como ponteiro. Os slots de parâmetro carregam `HirOwnership::Lend`/`HirOwnership::View` via `SraFacts`, e `SraFacts::localOfArgument`/`ownershipOfArgument` descascam a anotação para continuar acumulando factas por call argument (`SraArgEscape::Borrow` por default).
+
+`HirLowerModern::lowerFunctionLiteral` resolve a função sintetizada pela chave de instanciação da `Expression::declaration` e emite `hir::HirVar` com o nome de linkage dessa função. O caminho de `emitVar` em codegen resolve o nome para o endereço do function pointer, por isso o literal e uma referência a uma função nomeada partilham o mesmo lowering e a mesma ABI de call indireto. Não é preciso nenhum nó HIR novo.
 
 `HirLowerModern::lowerCall` materializa os defaults em falta como argumentos normais depois dos argumentos explícitos e antes de qualquer tail variadic/slice; o mesmo faz `HirDynCall` (com offset do receiver) e `HirStateTailCall`. Como a expressão default pertence ao snapshot do módulo declarador, `lowerVisibleDefault` troca temporariamente `current_module_`/`current_resolution_`/`current_types_` (e o contexto de instanciação genérica quando existe) para baixar a expressão no contexto certo.
 

@@ -141,6 +141,20 @@ hir::HirExprId HirLowerModern::lowerLiteral(const frontend::Expression &expr,
     return addExpr(std::move(literal));
 }
 
+hir::HirExprId HirLowerModern::lowerFunctionLiteral(const frontend::Expression &expr) {
+    // The literal's value is the address of its synthesized function. Emitting
+    // the function's linkage name as a `HirVar` reuses the existing
+    // function-pointer path in codegen (`emitVar` returns the function value).
+    const auto key = internFunctionKey(interner_, current_module_->key, expr.declaration);
+    if (const auto *function_index = function_index_by_key_.get(key)) {
+        hir::HirVar var;
+        var.name    = hir_.getFn(*function_index).name;
+        var.version = 0;
+        return addExpr(std::move(var));
+    }
+    return hir::kInvalidHirExpr;
+}
+
 hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
     // Prefer the per-expression resolution: it is keyed by span, so it cannot
     // pick up a same-named binding from another function.

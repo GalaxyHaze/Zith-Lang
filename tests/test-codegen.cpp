@@ -2835,6 +2835,36 @@ static void test_native_function_value_call() {
     CHECK_EQ(r.exitCode, 14, "an indirect call through a native function value returns 14");
 }
 
+static void test_anonymous_function_literal_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "fn apply(f: fn(i32, i32): i32, x: i32): i32 { f(x, x) }\n"
+            "fn main(): i32 {\n"
+            "    let add = fn (a: i32, b: i32): i32 { a + b };\n"
+            "    if (add(2, 3) != 5) { return 1; }\n"
+            "    if (apply(fn (a: i32, b: i32): i32 { a * b }, 4) != 16) { return 2; }\n"
+            "    return 0;\n"
+            "}\n");
+
+    auto r = t.run();
+    CHECK(r.ok, "an anonymous function literal compiles, links and executes");
+    CHECK_EQ(r.exitCode, 0, "the literal is callable directly and as a function value");
+}
+
+static void test_anonymous_function_capture_is_rejected() {
+    ModernFileCodegenTest t;
+    t.write("main.zith", "fn main(): i32 {\n"
+                         "    let x = 10;\n"
+                         "    let f = fn (a: i32): i32 { a + x };\n"
+                         "    return f(1);\n"
+                         "}\n");
+
+    const auto result = t.run();
+    CHECK(!result.ok, "a reference to an enclosing local in a function literal is rejected");
+    CHECK(result.hasMessage("unknown identifier 'x'"),
+          "the capture is reported as an unknown identifier, not silently captured");
+}
+
 static void test_state_value_dock_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "state Machine(n: i32): i32 {\n"
@@ -4762,6 +4792,10 @@ static void test_codegen() {
     test_function_pointer_call();
     printf("Running test_native_function_value_call\n");
     test_native_function_value_call();
+    printf("Running test_anonymous_function_literal_runtime\n");
+    test_anonymous_function_literal_runtime();
+    printf("Running test_anonymous_function_capture_is_rejected\n");
+    test_anonymous_function_capture_is_rejected();
     printf("Running test_state_value_dock_runtime\n");
     test_state_value_dock_runtime();
     printf("Running test_mutable_slice_from_c\n");
