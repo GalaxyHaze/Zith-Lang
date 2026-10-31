@@ -492,6 +492,10 @@ _Avoid_: standard container interface, collection protocol, common container
 The stdlib requirement that values can flow through a `dyn Trait` fat pointer. `Primitive erasure` covers primitives; broader support decides whether types like `string` can join homogeneous variadic tails.
 _Avoid_: runtime type support, reflection requirement, polymorphism support
 
+**Optional dyn receiver**:
+A `?dyn Trait` value used as a method-call receiver. It carries the same two-word fat pointer as `dyn Trait` and a null data pointer marks the `null` state, so dispatch is reachable only after an `is null` narrowing proves the payload present.
+_Avoid_: nullable dyn, tagged dyn pointer
+
 **Failable**:
 A Zith capability for values with valid and invalid states, distinct from ownership and from the kind of invalid state a value carries.
 _Avoid_: result wrapper, optional wrapper

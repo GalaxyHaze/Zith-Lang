@@ -413,6 +413,10 @@ private:
     /// Builds `None` for an optional aggregate, recursively zeroing nested
     /// optionals so `??T` keeps its inner `{payload, tag}` layout intact.
     hir::HirExprId lowerMakeNone(types::TypeId target);
+    /// True when `?T` is represented by the payload itself with a sentinel for
+    /// `None` (`?*T` uses a null pointer, `?dyn T` a null data pointer), so a
+    /// payload read loads the value directly instead of extracting field 0.
+    [[nodiscard]] bool isNicheOptional(types::TypeId optional_hir) const;
     sema::modern::TypeId semaTypeOfExpr(frontend::ExprId id);
     bool lowerStatement(frontend::StmtId id, hir::HirExprId &last_value);
     uint32_t requestedBindingAlignment(frontend::StmtId id);

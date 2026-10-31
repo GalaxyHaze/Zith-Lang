@@ -209,7 +209,9 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
             },
             [&](const hir::HirMakeNone &m) -> llvm::Value * {
                 auto *llvm_type = typeGen_.lower(m.type);
-                // For optional pointers, None == nullptr
+                // For optional pointers, None == nullptr. A `?dyn T` niche is
+                // the two-word fat pointer itself; None is the all-zero value
+                // (null data pointer and null vtable).
                 if (llvm_type->isPointerTy())
                     return llvm::ConstantPointerNull::get(llvm::cast<llvm::PointerType>(llvm_type));
                 return llvm::ConstantAggregateZero::get(llvm_type);
@@ -347,8 +349,9 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
                 if (!val)
                     return nullptr;
                 auto *llvm_type = typeGen_.lower(m.type);
-                // For optional pointers, Some is just the pointer itself
-                if (llvm_type->isPointerTy())
+                // For a niche optional (`?*T`, `?dyn T`) the payload value is
+                // the representation itself: the pointer or the fat pointer.
+                if (llvm_type->isPointerTy() || llvm_type == val->getType())
                     return val;
                 llvm::Value *result = llvm::ConstantAggregateZero::get(llvm_type);
                 result              = builder_.CreateInsertValue(result, val, {0u});
@@ -579,6 +582,14 @@ llvm::Value *CodeGenEmit::emitBinary(const hir::HirBinary &bin, const hir::HirMo
         lhs = builder_.CreateExtractValue(lhs, {0U});
     else if (rhs->getType()->isStructTy() && lhs->getType()->isPointerTy())
         rhs = builder_.CreateExtractValue(rhs, {0U});
+    // A `?dyn T` niche compares the fat pointer against the all-zero `None`.
+    // LLVM cannot compare two aggregate values directly, and the data pointer
+    // (field 0) alone distinguishes `None` from a present payload.
+    if (lhs->getType()->isStructTy() && lhs->getType() == rhs->getType() &&
+        (bin.op == hir::HirBinaryOp::Eq || bin.op == hir::HirBinaryOp::Ne)) {
+        lhs = builder_.CreateExtractValue(lhs, {0U});
+        rhs = builder_.CreateExtractValue(rhs, {0U});
+    }
     if (lhs->getType() != rhs->getType())
         return nullptr;
 

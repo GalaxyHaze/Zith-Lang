@@ -35,6 +35,11 @@ hir::HirExprId HirLowerModern::lowerLValueAddr(frontend::ExprId id) {
             const auto local_ty = typeOfLocal(resolved->local);
             for (auto it = narrowing_stack_.rbegin(); it != narrowing_stack_.rend(); ++it) {
                 if (it->local == resolved->local && it->optionalPayload) {
+                    if (isNicheOptional(local_ty)) {
+                        const auto loaded = emitSlotLoad(slot, local_ty);
+                        return addExpr(hir::HirUnary{hir::HirUnaryOp::Ref, loaded,
+                                                     types_.internPtr(it->type)});
+                    }
                     const auto payload_field = addExpr(hir::HirField{
                         addExpr(hir::HirSlotAddr{slot, local_ty}), 0U, it->type, local_ty,
                         hir::HirSafetyMode::Guarded});

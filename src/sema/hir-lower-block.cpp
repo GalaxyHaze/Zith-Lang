@@ -188,10 +188,12 @@ hir::HirExprId HirLowerModern::lowerIf(const frontend::Expression &expr, const t
         const auto inner_sema = sema_.typeTable().stripQualifiers(optional->inner);
         narrowed_local        = resolved->local;
         narrowed_type         = lowerType(inner_sema);
-        // `?*T` uses the pointer niche: the slot stores a bare pointer, so
-        // reads in the guarded branch can load it directly as `*T`. Aggregate
-        // `?T` keeps a payload field and needs field extraction instead.
-        narrowed_optional_payload = sema_.typeTable().kindOf(inner_sema) != TypeKind::Pointer;
+        // `?*T` and `?dyn T` use a niche: the slot stores the payload itself,
+        // so reads in the guarded branch load it directly. Aggregate `?T` keeps
+        // a payload field and needs field extraction instead.
+        const TypeKind inner_kind = sema_.typeTable().kindOf(inner_sema);
+        narrowed_optional_payload =
+            inner_kind != TypeKind::Pointer && inner_kind != TypeKind::Dyn;
     };
     if (condition.kind == frontend::ExprKind::IsNull && !condition.operands.empty()) {
         makeOptionalNarrowing(condition.operands[0]);
@@ -849,9 +851,7 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
     if (has_optional) {
         // `next(self): ?T`: `None` is End. For aggregate optionals the tag is
         // field 1; for optional pointers the value itself is the sentinel.
-        const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(next_type));
-        const bool niche =
-            optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr;
+        const bool niche = isNicheOptional(next_type);
         if (!niche) {
             const auto next_addr = addExpr(hir::HirSlotAddr{next_slot, next_type});
             cond_expr = addExpr(hir::HirField{next_addr, 1U, types::kBoolType, next_type,
@@ -893,8 +893,7 @@ hir::HirExprId HirLowerModern::lowerForIn(const frontend::Expression &expr) {
         // Optional payload extraction: field 0 for aggregate `?T`; the value
         // itself for nullable pointers. `??T` extracts the outer payload,
         // which is still `?T` and becomes the loop variable type directly.
-        const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(next_type));
-        if (optional != nullptr && types_.kindOf(optional->inner) != types::TypeKind::Ptr) {
+        if (!isNicheOptional(next_type)) {
             payload = addExpr(hir::HirField{addExpr(hir::HirSlotAddr{next_slot, next_type}), 0U,
                                             loop_type, next_type,
                                             hir::HirSafetyMode::Guarded});

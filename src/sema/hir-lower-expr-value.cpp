@@ -152,8 +152,11 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
             for (auto it = narrowing_stack_.rbegin(); it != narrowing_stack_.rend(); ++it) {
                 if (it->local == resolved->local) {
                     if (it->optionalPayload) {
-                        // The slot still stores `?T`; extract field 0 so reads
-                        // after `is null` use the payload type.
+                        // The slot still stores `?T`. For a niche optional
+                        // (`?*T`, `?dyn T`) the value itself is the payload;
+                        // otherwise extract field 0.
+                        if (isNicheOptional(local_ty))
+                            return emitSlotLoad(slot, local_ty);
                         return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, local_ty}), 0U,
                                                      it->type, local_ty,
                                                      hir::HirSafetyMode::Guarded});
@@ -190,6 +193,8 @@ hir::HirExprId HirLowerModern::lowerName(const frontend::Expression &expr) {
             if (current_types_ != nullptr) {
                 if (const auto *payload = current_types_->optionalPayloadReads.get(expr.id.value)) {
                     const auto payload_hir = lowerType(*payload);
+                    if (isNicheOptional(local_ty))
+                        return emitSlotLoad(slot, local_ty);
                     return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, local_ty}), 0U,
                                                  payload_hir, local_ty,
                                                  hir::HirSafetyMode::Guarded});
@@ -668,9 +673,7 @@ hir::HirExprId HirLowerModern::lowerOptionalCondition(frontend::ExprId id) {
     if (operand == hir::kInvalidHirExpr || types_.kindOf(operand_type) != types::TypeKind::Optional)
         return hir::kInvalidHirExpr;
 
-    const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(operand_type));
-    const bool niche =
-        optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr;
+    const bool niche = isNicheOptional(operand_type);
     if (niche) {
         // ?*T uses nullptr as the None sentinel; non-null is the owned boolean.
         hir::HirMakeNone none;
@@ -699,8 +702,7 @@ hir::HirExprId HirLowerModern::lowerOptionalPayload(const frontend::Expression &
     if (operand == hir::kInvalidHirExpr || types_.kindOf(operand_type) != types::TypeKind::Optional)
         return hir::kInvalidHirExpr;
     if (!checked) {
-        const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(operand_type));
-        if (optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr)
+        if (isNicheOptional(operand_type))
             return operand;
         const auto slot = next_slot_++;
         current_fn_->blocks[current_block_].insts.push(emitSlotAlloca(slot, operand_type));
@@ -714,8 +716,7 @@ hir::HirExprId HirLowerModern::lowerOptionalPayload(const frontend::Expression &
     current_fn_->blocks[current_block_].insts.push(emitSlotStore(slot, operand));
 
     const auto is_some = [&]() -> hir::HirExprId {
-        const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(operand_type));
-        if (optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr) {
+        if (isNicheOptional(operand_type)) {
             hir::HirMakeNone none;
             none.type = operand_type;
             return addExpr(hir::HirBinary{addExpr(hir::HirSlotLoad{slot, operand_type}),
@@ -743,8 +744,7 @@ hir::HirExprId HirLowerModern::lowerOptionalPayload(const frontend::Expression &
 
     setCurrentBlock(some_block);
     current_fn_->blocks[some_block].insts = memory::DynArray<hir::HirExprId>(arena_);
-    const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(operand_type));
-    if (optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr)
+    if (isNicheOptional(operand_type))
         return emitSlotLoad(slot, operand_type);
     return addExpr(hir::HirField{addExpr(hir::HirSlotAddr{slot, operand_type}), 0U, type,
                                  operand_type, hir::HirSafetyMode::Guarded});
@@ -958,9 +958,7 @@ hir::HirExprId HirLowerModern::lowerIsNull(const frontend::Expression &expr) {
     if (types_.kindOf(operand_type) != types::TypeKind::Optional)
         return hir::kInvalidHirExpr;
 
-    const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(operand_type));
-    const bool niche =
-        optional != nullptr && types_.kindOf(optional->inner) == types::TypeKind::Ptr;
+    const bool niche = isNicheOptional(operand_type);
     if (niche) {
         // ?*T uses nullptr as the None sentinel: compare against MakeNone directly.
         hir::HirMakeNone none;
@@ -1725,6 +1723,16 @@ hir::HirExprId HirLowerModern::lowerMakeNone(types::TypeId target) {
     hir::HirMakeNone make_none;
     make_none.type = target;
     return addExpr(std::move(make_none));
+}
+
+bool HirLowerModern::isNicheOptional(types::TypeId optional_hir) const {
+    if (optional_hir == types::kInvalidType || optional_hir == types::kErrorType)
+        return false;
+    const auto *optional = std::get_if<types::TypeOptional>(&types_.lookup(optional_hir));
+    if (optional == nullptr)
+        return false;
+    const auto inner_kind = types_.kindOf(optional->inner);
+    return inner_kind == types::TypeKind::Ptr || inner_kind == types::TypeKind::Dyn;
 }
 
 hir::HirExprId HirLowerModern::lowerCoerceToOptionalDepth(types::TypeId target,

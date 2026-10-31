@@ -203,6 +203,10 @@ llvm::Type *CodeGenType::lower(types::TypeId id) {
                 // Niche optimization: ?*T uses nullptr as None sentinel
                 if (inner->isPointerTy())
                     return inner;
+                // ?dyn T is layout-identical to dyn T: the two-word fat pointer
+                // itself carries the niche, with a null data pointer as None.
+                if (types_.kindOf(t.inner) == types::TypeKind::Dyn)
+                    return inner;
                 return llvm::StructType::get(ctx_, {inner, llvm::Type::getInt1Ty(ctx_)});
             } else if constexpr (std::is_same_v<T, types::TypeSlice>) {
                 return llvm::StructType::get(
