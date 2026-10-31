@@ -48,11 +48,19 @@ struct MonoTest {
     };
 
     Result run(std::string_view input, session::Stage target = session::Stage::HirLowered) {
-        const auto path = root / "main.zith";
-        std::ofstream file(path, std::ios::binary | std::ios::trunc);
-        file << input;
-        file.close();
+        write("main.zith", input);
+        return runMain(target);
+    }
 
+    void write(std::string_view name, std::string_view text) {
+        const auto path = root / name;
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file << text;
+    }
+
+    Result runMain(session::Stage target = session::Stage::HirLowered) {
+        const auto path = root / "main.zith";
         session::FrontendConfig config;
         config.workspaceRoot      = root.string();
         config.maxFrontendWorkers = 1;
@@ -207,6 +215,23 @@ void test_generic_explosion_limit() {
           "recursive generic instantiation either lowers or reports the explosion limit");
 }
 
+void test_imported_generic_struct_returned_by_value() {
+    MonoTest t;
+    // The module stem equals the struct name, which is the shape that used to
+    // leave the reified field as the stale generic parameter `T`.
+    t.write("Pair.zith", "pub struct Pair<T> { pub x: T }\n");
+    t.write("main.zith", "import Pair as p\n"
+                         "fn build(): p.Pair<i64> { return p.Pair<i64> { x: 5i64 }; }\n"
+                         "fn main(): i32 {\n"
+                         "    let v = build();\n"
+                         "    return v.x as i32;\n"
+                         "}\n");
+    auto r = t.runMain();
+    CHECK(r.ok, "an imported generic struct returned by value type-checks and lowers");
+    CHECK(!r.hasErrorCode(diagnostics::err::GenericArity),
+          "the reified field resolves to the concrete argument, not a stale generic (no E3010)");
+}
+
 } // namespace
 
 int main() {
@@ -223,6 +248,7 @@ int main() {
     test_generic_optional_coercion_inference();
     test_generic_optional_coercion_conflict_and_unexposed();
     test_generic_explosion_limit();
+    test_imported_generic_struct_returned_by_value();
     std::printf("\nResults: %d passed, %d failed\n", g_test_passed, g_test_failed);
     return g_test_failed > 0 ? 1 : 0;
 }
