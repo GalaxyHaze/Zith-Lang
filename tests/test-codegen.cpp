@@ -3437,6 +3437,180 @@ static void test_for_loop_return_runtime() {
     CHECK_EQ(r.exitCode, 5, "the loop body return value is returned");
 }
 
+// A concrete value stored into a `?dyn Trait` slot must erase the payload to a
+// fat pointer before the `Some` wrap. Before the fix the raw aggregate was
+// stored into the fat-pointer slot and LLVM aborted in `combineStore`.
+static void test_optional_dyn_local_binding_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "trait Counter { fn get(self): i32; }\n"
+            "struct Cell { v: i32 }\n"
+            "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+            "fn main(): i32 {\n"
+            "    let c: ?dyn Counter = Cell{v:7};\n"
+            "    if (c is null) { return 1; }\n"
+            "    let r = raw c;\n"
+            "    return r.get();\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "optional dyn local binding uses the modern codegen pipeline");
+    CHECK(r.ok, "a concrete value binds into a ?dyn local without an LLVM abort");
+    CHECK_EQ(r.errorCount, 0u, "the ?dyn local binding module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 7, "the erased payload round-trips and dispatches");
+}
+
+// A `?dyn Trait` struct field set from a concrete value, read back with an
+// `is null` narrowing.
+static void test_optional_dyn_struct_field_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "trait Counter { fn get(self): i32; }\n"
+            "struct Cell { v: i32 }\n"
+            "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+            "struct Holder { c: ?dyn Counter }\n"
+            "fn main(): i32 {\n"
+            "    let h = Holder{c: Cell{v:7}};\n"
+            "    if (h.c is null) { return 1; }\n"
+            "    let r = raw h.c;\n"
+            "    return r.get();\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "optional dyn struct field uses the modern codegen pipeline");
+    CHECK(r.ok, "a concrete value initializes a ?dyn struct field in a literal");
+    CHECK_EQ(r.errorCount, 0u, "the ?dyn struct-literal field passes LLVM verification");
+    CHECK_EQ(r.exitCode, 7, "the stored ?dyn field dispatches to the concrete method");
+}
+
+// Dispatch directly on a narrowed `?dyn` receiver, without an explicit `raw`
+// extraction, for both the early-return and the `else` shapes.
+static void test_optional_dyn_narrowed_dispatch_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "trait Counter { fn get(self): i32; }\n"
+            "struct Cell { v: i32 }\n"
+            "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+            "struct Holder { c: ?dyn Counter }\n"
+            "fn early(): i32 {\n"
+            "    let c: ?dyn Counter = Cell{v:7};\n"
+            "    if (c is null) { return 1; }\n"
+            "    return c.get();\n"
+            "}\n"
+            "fn via_else(h: Holder): i32 {\n"
+            "    if (h.c is null) { return 1; } else { return h.c.get(); }\n"
+            "}\n"
+            "fn main(): i32 {\n"
+            "    if (early() != 7) { return 1; }\n"
+            "    let h = Holder{c: Cell{v:7}};\n"
+            "    if (via_else(h) != 7) { return 2; }\n"
+            "    return 0;\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "narrowed ?dyn dispatch uses the modern codegen pipeline");
+    CHECK(r.ok, "a narrowed ?dyn receiver dispatches for early-return and else shapes");
+    CHECK_EQ(r.errorCount, 0u, "the narrowed ?dyn dispatch module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 0, "both narrowing shapes dispatch to the concrete method");
+}
+
+// A `?dyn Trait` value crosses a parameter boundary and erases the payload on
+// the way in. The value is built in the caller's frame so the callee receives
+// a fat pointer whose data pointer outlives the call. (Returning a `?dyn`
+// built from a temporary is the separate plain-`dyn` escape bug, out of scope.)
+static void test_optional_dyn_parameter_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "trait Counter { fn get(self): i32; }\n"
+            "struct Cell { v: i32 }\n"
+            "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+            "fn use_it(c: ?dyn Counter): i32 {\n"
+            "    if (c is null) { return 1; }\n"
+            "    let r = raw c;\n"
+            "    return r.get();\n"
+            "}\n"
+            "fn main(): i32 {\n"
+            "    let c: ?dyn Counter = Cell{v:7};\n"
+            "    return use_it(c);\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "?dyn parameter passing uses the modern codegen pipeline");
+    CHECK(r.ok, "a ?dyn value crosses a parameter boundary without an LLVM abort");
+    CHECK_EQ(r.errorCount, 0u, "the ?dyn parameter module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 7, "the erased payload survives the parameter boundary");
+}
+
+// Assigning a concrete value into an existing `?dyn Trait` slot erases the
+// payload before the `Some` wrap, for both a local and a struct field. This is
+// the assignment form of the same R1 defect the literal and binding paths had.
+static void test_optional_dyn_assignment_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "trait Counter { fn get(self): i32; }\n"
+            "struct Cell { v: i32 }\n"
+            "struct Other { v: i32 }\n"
+            "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+            "implement Other as Counter { fn get(self): i32 { return self.v + 100; } }\n"
+            "struct Holder { c: ?dyn Counter = null }\n"
+            "fn main(): i32 {\n"
+            "    var l: ?dyn Counter = null;\n"
+            "    l = Cell{v:7};\n"
+            "    if (l is null) { return 1; }\n"
+            "    let lr = raw l;\n"
+            "    if (lr.get() != 7) { return 2; }\n"
+            "    var h = Holder{};\n"
+            "    h.c = Cell{v:7};\n"
+            "    if (h.c is null) { return 3; }\n"
+            "    let hr = raw h.c;\n"
+            "    if (hr.get() != 7) { return 4; }\n"
+            "    h.c = Other{v:8};\n"
+            "    if (h.c is null) { return 5; }\n"
+            "    let hr2 = raw h.c;\n"
+            "    if (hr2.get() != 108) { return 6; }\n"
+            "    return 0;\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "?dyn assignment uses the modern codegen pipeline");
+    CHECK(r.ok, "a concrete value assigns into a ?dyn local and field without an LLVM abort");
+    CHECK_EQ(r.errorCount, 0u, "the ?dyn assignment module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 0, "the erased payload round-trips through assignment and dispatch");
+}
+
+// Dispatching on a `?dyn` receiver without a non-null proof is a diagnostic,
+// not an LLVM abort.
+static void test_optional_dyn_without_narrowing_diagnostic() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "trait Counter { fn get(self): i32; }\n"
+            "struct Cell { v: i32 }\n"
+            "implement Cell as Counter { fn get(self): i32 { return self.v; } }\n"
+            "fn main(): i32 {\n"
+            "    let c: ?dyn Counter = Cell{v:7};\n"
+            "    return c.get();\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(!r.ok, "an unproven ?dyn receiver is rejected");
+    CHECK(r.hasMessage("narrow it after 'is null'"),
+          "the unproven ?dyn dispatch reports the dedicated narrowing diagnostic");
+}
+
+// The same R1 shape applies to a `?opaque` field and binding.
+static void test_optional_opaque_slot_runtime() {
+    ModernFileCodegenTest t;
+    t.write("main.zith",
+            "struct Cell { v: i32 }\n"
+            "struct Holder { c: ?opaque }\n"
+            "fn main(): i32 {\n"
+            "    let h = Holder{c: Cell{v:7}};\n"
+            "    if (h.c is null) { return 1; }\n"
+            "    let b: ?opaque = Cell{v:9};\n"
+            "    if (b is null) { return 2; }\n"
+            "    return 0;\n"
+            "}\n");
+    auto r = t.run();
+    CHECK(r.usedModern, "?opaque field and binding use the modern codegen pipeline");
+    CHECK(r.ok, "a concrete value erases into a ?opaque field and binding");
+    CHECK_EQ(r.errorCount, 0u, "the ?opaque module passes LLVM verification");
+    CHECK_EQ(r.exitCode, 0, "the erased ?opaque payload is present, not null");
+}
+
 static void test_function_default_arguments_runtime() {
     ModernFileCodegenTest t;
     t.write("main.zith", "fn add(left: i32, right: i32 = 5): i32 {\n"
@@ -4477,6 +4651,20 @@ static void test_codegen() {
     test_if_else_both_return_runtime();
     printf("Running test_for_loop_return_runtime\n");
     test_for_loop_return_runtime();
+    printf("Running test_optional_dyn_local_binding_runtime\n");
+    test_optional_dyn_local_binding_runtime();
+    printf("Running test_optional_dyn_struct_field_runtime\n");
+    test_optional_dyn_struct_field_runtime();
+    printf("Running test_optional_dyn_narrowed_dispatch_runtime\n");
+    test_optional_dyn_narrowed_dispatch_runtime();
+    printf("Running test_optional_dyn_parameter_runtime\n");
+    test_optional_dyn_parameter_runtime();
+    printf("Running test_optional_dyn_assignment_runtime\n");
+    test_optional_dyn_assignment_runtime();
+    printf("Running test_optional_dyn_without_narrowing_diagnostic\n");
+    test_optional_dyn_without_narrowing_diagnostic();
+    printf("Running test_optional_opaque_slot_runtime\n");
+    test_optional_opaque_slot_runtime();
     printf("Running test_function_default_arguments_runtime\n");
     test_function_default_arguments_runtime();
     printf("Running test_nested_optional_argument_runtime\n");
