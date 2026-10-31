@@ -85,6 +85,14 @@ that are easy to get wrong when editing that plan.
   The name allow-list in `src/vm/hir-to-vm.cpp` (`lowerCall`) must list every
   validated extern, or lowering rejects the call before dispatch. `strcpy`,
   `strcat`, `strcmp`, and `memcmp` were added so `soon/string` lowers on v2.
+- A `HirRuntimePanic` lowers to one of two terminators: the dedicated
+  `Op::NullDeref` for the optional-extraction code `R10003`, and the generic
+  `Op::Panic` for every other `R10001+` code, whose `imm` carries the code. The
+  runtime maps `Op::Panic` to `state.message = "R<imm>"` and a trap, so
+  `@assert(false)`/`@check(false)` outside a test report `R10004`. A code that
+  does not fit the 16-bit immediate fails the lowering. `Op::Panic` was
+  appended last so existing op byte values stay stable; an older VIR reader
+  rejects it (`op > Op::Panic` bound) and re-lowers instead of misreading.
 - `realloc` preserves live allocation contents through the allocator's block
   tracking.
 - `tests/test-stdlib-parity.cpp` runs stdlib programs through both `zithc` and
