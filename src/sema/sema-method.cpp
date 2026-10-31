@@ -229,6 +229,10 @@ TypeId PerModuleSema::inferMethodCall(const frontend::Expression &call,
                        "cannot call '" + callee.text + "' on a possibly-null '" +
                            type_table.typeToString(resolved_base) + "'; narrow it after 'is null'",
                        diagnostics::err::TypeMismatch);
+                // Type the callee as `error` so the standalone expression sweep
+                // skips `c.get` and does not add a second generic field-access
+                // diagnostic on top of the dedicated one above.
+                setExprType(callee.id, error_type);
                 return error_type;
             }
         }
