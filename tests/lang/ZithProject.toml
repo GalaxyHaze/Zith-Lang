@@ -1,0 +1,6 @@
+[project]
+name = "lang-tests"
+version = "0.1.0"
+
+[paths]
+test_dir = "tests"

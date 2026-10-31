@@ -1,0 +1,27 @@
+// Language corpus: boolean operators and short-circuit logic.
+fn isPositive(value: i32): bool {
+    value > 0
+}
+
+#[test]
+fn logical_and_or() {
+    @assert(true and true);
+    @assert(true or false);
+    @assert(not false);
+    @assert(false == false);
+}
+
+#[test]
+fn comparison_results_are_bools() {
+    @assert(isPositive(5));
+    @assert(not isPositive(-3));
+    @assert(isPositive(1) and not isPositive(0));
+}
+
+#[test]
+fn combined_conditions() {
+    let a: i32 = 4;
+    let b: i32 = 9;
+    @assert(a < b and b > a);
+    @assert(a == 4 or b == 100);
+}

@@ -1,0 +1,29 @@
+// Language corpus: enums with explicit and implicit discriminants.
+enum Color: u8 {
+    Red = 2,
+    Green
+}
+
+enum Direction {
+    North = 0,
+    East = 1,
+    South = 2,
+    West = 3
+}
+
+#[test]
+fn enum_members_are_distinct() {
+    @assert(Color.Red != Color.Green);
+}
+
+#[test]
+fn enum_cast_to_integer() {
+    @assert(Color.Red as i32 == 2);
+    @assert(Color.Green as i32 == 3);
+}
+
+#[test]
+fn enum_ordering_by_value() {
+    @assert(Direction.North as i32 == 0);
+    @assert(Direction.West as i32 == 3);
+}

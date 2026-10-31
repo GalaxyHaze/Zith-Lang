@@ -1,0 +1,43 @@
+// Language corpus: generic functions, structs and aliases.
+fn identity<T>(x: T): T {
+    x
+}
+
+fn maxOf<T>(a: T, b: T): T {
+    if (a > b) {
+        return a;
+    }
+    b
+}
+
+struct Box<T> {
+    value: T
+}
+
+alias Answer<T> = T
+
+#[test]
+fn generic_function_explicit_arguments() {
+    let a = identity<i32>(21);
+    @assert(a == 21);
+}
+
+#[test]
+fn generic_function_inferred_arguments() {
+    let a: i32 = identity(7);
+    @assert(a == 7);
+}
+
+#[test]
+fn generic_max_of() {
+    @assert(maxOf<i32>(3, 9) == 9);
+    @assert(maxOf<i32>(9, 3) == 9);
+}
+
+#[test]
+fn generic_struct_and_alias() {
+    let box = Box<i32> { value: 11 };
+    @assert(box.value == 11);
+    let answer: Answer<i32> = 42;
+    @assert(answer == 42);
+}
