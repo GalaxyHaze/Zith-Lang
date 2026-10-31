@@ -46,6 +46,30 @@ on `PATH`;
 if a local LLVM has a different version, either put `clang-format<N>`
 on `PATH` or re-run CMake after installing it.
 
+### Run everything through `agent-run`
+
+Always wrap commands you execute with the `agent-run` helper in `~/.local/bin`
+(already on `PATH`). It applies a wall-clock timeout, `nice`, `ionice`, and an
+optional per-process CPU cap so a hung or runaway process (a compiler loop, a
+test, a build) cannot cook the CPU or SSD:
+
+```bash
+# Builds: cap CPU off, keep the timeout generous.
+agent-run -t 900 -c 0 -- cmake --build build -j4
+
+# Probes and test runs: a tight timeout, a small CPU cap.
+agent-run -t 30 -c 50 -- ./build/zithc --no-cache run prog.zith
+
+# Tests.
+agent-run -t 900 -c 0 -- ctest --test-dir build --output-on-failure
+```
+
+Use `-t <secs>` for the timeout (`0` disables it), `-c <pct>` for the CPU cap
+(`0` disables it), and `-h` for the full option list. The helper exits `124`
+on timeout. This matters for `zithc`: malformed input has historically made the
+LLVM backend loop at 100% CPU, so an unwrapped `zithc` invocation can hang the
+machine.
+
 ## CMake Options & Feature Gate
 
 The root `CMakeLists.txt` exposes several options that change which compiler
@@ -179,9 +203,18 @@ semantic analysis. Run the full CTest suite before submitting.
 
 Recent history uses concise conventional prefixes when useful, for example
 `feat: parser support for extern fn declarations`, `fix: ...`, `refactor: ...`,
-and `build: ...`. Keep each commit narrowly scoped. Pull requests should explain
-the compiler behavior changed, list tests run, link relevant issues, and include
-sample source or output when diagnostics, syntax, or CLI behavior changes.
+and `build: ...`. Keep each commit narrowly scoped.
+
+Make **small commits** during the work, not one large commit at the end. Commit
+each self-contained step as soon as it builds and its focused tests pass (a fix,
+its regression test, and its docs are three reasonable commits, or one small
+commit when they are truly inseparable). A dirty worktree left uncommitted for a
+long session is hard to review and easy to lose, so prefer committing early and
+often over batching everything into a final commit.
+
+Pull requests should explain the compiler behavior changed, list tests run, link
+relevant issues, and include sample source or output when diagnostics, syntax,
+or CLI behavior changes.
 
 <!-- BEGIN opencode-rag -->
 ## Code Navigation
