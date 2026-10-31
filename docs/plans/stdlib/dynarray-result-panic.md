@@ -44,4 +44,10 @@ Open decisions:
   result-only parameters without explicit `<...>`. The shipped surface is
   `stdlib/std/result.zith`. `Result<void, E>` remains open.
 - Choose the portable backend mechanism that makes `panic` fatal while
-  preserving its message in the available diagnostic channel.
+  preserving its message in the available diagnostic channel. Partly resolved:
+  the VM v2 lowering now accepts any `R10001+` runtime panic code (the generic
+  `Op::Panic` carries the code), so a panic no longer has to be the
+  optional-extraction `R10003`. The remaining decision is how a
+  `panic(message)` preserves its text: native codegen traps through
+  `llvm.trap` before stdout is flushed, so the message is not visible on the
+  abort path yet.
