@@ -187,6 +187,9 @@ private:
     void registerNamedTypes();
     void lowerDeclarationTypes();
     void checkComponentDeclarations();
+    void checkComponentMethods();
+    [[nodiscard]] bool isPureComponentMethodExpr(frontend::ExprId id,
+                                                 const frontend::Declaration &method) const;
     void checkComponentFields(const frontend::Declaration &decl, TypeId type,
                               bool allow_generic_params);
     [[nodiscard]] bool isComponentFieldType(TypeId type, bool allow_generic_params,

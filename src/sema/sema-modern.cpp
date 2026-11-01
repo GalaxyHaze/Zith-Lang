@@ -54,6 +54,7 @@ bool PerModuleSema::checkExpressions() {
     checkConstFieldAssignments();
     checkZithDeclarations();
     checkReturnsAndCalls();
+    checkComponentMethods();
     return !hasErrors();
 }
 

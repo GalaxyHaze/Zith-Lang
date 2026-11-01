@@ -175,7 +175,7 @@ A plain-old-data (POD) struct, **copy by default** alongside primitives. Compone
 ```zith
 component Vec2 {
     [x, y]: f32,
-    fn length(self): f32 { sqrt(self.x*self.x + self.y*self.y) }
+    fn lengthSquared(self): f32 { self.x*self.x + self.y*self.y }
     fn dot(self, other: Self): f32 { 
         self.x*other.x + self.y*other.y 
     }
@@ -188,7 +188,8 @@ A component must satisfy all of the following constraints:
 - No trait declarations (`component Name: Traits` is not allowed).
 - Inline functions are permitted but restricted to pure transformations:
   - No side effects (I/O, allocation, global mutation).
-  - Only arithmetic, comparisons, and field access.
+  - Bodies may use literals, parameters, arithmetic, comparisons, and field access. Calls are
+    rejected because Zith-- does not prove that a callee has no side effects.
   - Must return a value, so `void` is not allowed.
 - Copying is always bitwise (memcpy-safe).
 - Layout is C-compatible, so there are no vtables or fat pointers.

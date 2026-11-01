@@ -162,6 +162,36 @@ void test_component_field_constraints() {
           "components cannot implement traits through an implement block");
 }
 
+void test_component_inline_method_constraints() {
+    SessionRunner valid;
+    const auto accepted =
+        valid.run("component Vec2 {\n"
+                  "    x: f32,\n"
+                  "    y: f32,\n"
+                  "    fn lengthSquared(self): f32 { self.x * self.x + self.y * self.y }\n"
+                  "    fn dot(self, other: Self): f32 { self.x * other.x + self.y * other.y }\n"
+                  "    fn sum(self): f32 { return self.x + self.y; }\n"
+                  "}\n"
+                  "fn main(): i32 { return 0; }\n");
+    CHECK(accepted.ok, "component methods accept arithmetic and field transformations");
+
+    SessionRunner invalid;
+    const auto rejected =
+        invalid.run("fn helper(value: i32): i32 { value + 1 }\n"
+                    "component Invalid {\n"
+                    "    value: i32,\n"
+                    "    fn calls(self): i32 { helper(self.value) }\n"
+                    "    fn mutates(var self): i32 { self.value = 1; self.value }\n"
+                    "    fn noValue(self) { return; }\n"
+                    "}\n"
+                    "fn main(): i32 { return 0; }\n");
+    CHECK(!rejected.ok, "component methods reject calls, mutation, and void results");
+    CHECK(rejected.hasMessage("component method bodies may only"),
+          "calls and mutation report the pure-transformation restriction");
+    CHECK(rejected.hasMessage("component methods must return a value"),
+          "void component methods report the missing value result");
+}
+
 void test_generic_component_rejects_non_pod_instantiation() {
     SessionRunner t;
     const auto rejected = t.run("component Box<T> { value: T }\n"
@@ -302,6 +332,7 @@ void test_noalias_requires_pointer_return() {
 void test_parse_input() {
     test_primitive_casts_type_check();
     test_component_field_constraints();
+    test_component_inline_method_constraints();
     test_generic_component_rejects_non_pod_instantiation();
     test_imported_generic_component_constraints();
     test_cast_does_not_consume_line();

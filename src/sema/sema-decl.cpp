@@ -700,6 +700,97 @@ void PerModuleSema::checkComponentDeclarations() {
     }
 }
 
+bool PerModuleSema::isPureComponentMethodExpr(const frontend::ExprId id,
+                                              const frontend::Declaration &method) const {
+    if (!id || id.value > snapshot.expressions().size())
+        return false;
+
+    const auto &expression = snapshot.expressions()[id.value - 1U];
+
+    switch (expression.kind) {
+    case frontend::ExprKind::Literal:
+        return true;
+    case frontend::ExprKind::Name:
+        return std::any_of(method.parameters.begin(), method.parameters.end(),
+                           [&](const frontend::Parameter &parameter) {
+                               return parameter.name == expression.text;
+                           });
+    case frontend::ExprKind::Unary:
+        return (expression.text == "+" || expression.text == "-") &&
+               expression.operands.size() == 1U &&
+               isPureComponentMethodExpr(expression.operands[0], method);
+    case frontend::ExprKind::Binary: {
+        const bool arithmetic = expression.text == "+" || expression.text == "-" ||
+                                expression.text == "*" || expression.text == "/" ||
+                                expression.text == "%";
+        const bool comparison = expression.text == "==" || expression.text == "!=" ||
+                                expression.text == "<" || expression.text == "<=" ||
+                                expression.text == ">" || expression.text == ">=";
+        return (arithmetic || comparison) && expression.operands.size() == 2U &&
+               isPureComponentMethodExpr(expression.operands[0], method) &&
+               isPureComponentMethodExpr(expression.operands[1], method);
+    }
+    case frontend::ExprKind::Field:
+    case frontend::ExprKind::Arrow:
+        return expression.operands.size() == 1U &&
+               isPureComponentMethodExpr(expression.operands[0], method);
+    case frontend::ExprKind::Return:
+        return expression.operands.size() == 1U &&
+               isPureComponentMethodExpr(expression.operands[0], method);
+    case frontend::ExprKind::Block:
+        for (const frontend::StmtId statement_id : expression.statements) {
+            if (!statement_id || statement_id.value > snapshot.statements().size())
+                return false;
+            const auto &statement = snapshot.statements()[statement_id.value - 1U];
+            if ((statement.kind != frontend::StmtKind::Expression &&
+                 statement.kind != frontend::StmtKind::Return) ||
+                !statement.expression || !isPureComponentMethodExpr(statement.expression, method))
+                return false;
+        }
+        return std::all_of(expression.operands.begin(), expression.operands.end(),
+                           [&](const frontend::ExprId operand) {
+                               return isPureComponentMethodExpr(operand, method);
+                           });
+    default:
+        return false;
+    }
+}
+
+void PerModuleSema::checkComponentMethods() {
+    for (const auto &component : snapshot.declarations()) {
+        if (component.kind != frontend::DeclKind::Struct || !component.isComponent)
+            continue;
+
+        for (const frontend::DeclId method_id : component.methodDeclarations) {
+            if (!method_id || method_id.value > snapshot.declarations().size())
+                continue;
+            const auto &method = snapshot.declarations()[method_id.value - 1U];
+            if (method.kind != frontend::DeclKind::Function)
+                continue;
+
+            if (!method.body) {
+                report(method.span, "component methods must be defined inline",
+                       diagnostics::err::TypeMismatch);
+                continue;
+            }
+
+            const auto *function_type = type_table.function(typeOfDecl(method.id));
+            if (function_type != nullptr && type_table.kindOf(type_table.stripQualifiers(
+                                                function_type->result)) == TypeKind::Void) {
+                report(method.span, "component methods must return a value",
+                       diagnostics::err::TypeMismatch);
+            }
+
+            if (!isPureComponentMethodExpr(method.body, method)) {
+                report(method.span,
+                       "component method bodies may only use literals, parameters, arithmetic, "
+                       "comparisons, and field access",
+                       diagnostics::err::TypeMismatch);
+            }
+        }
+    }
+}
+
 void PerModuleSema::checkImplementBlocks() {
     // Group method declarations by `(owner, trait)` so an empty implement block
     // is still checked for duplicate implementation and missing requirements.
