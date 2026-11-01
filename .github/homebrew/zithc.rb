@@ -1,3 +1,5 @@
+# frozen_string_literal: true
+
 # Audit reference formula for GalaxyHaze/homebrew-zithc.
 #
 # This file documents the release contract that build-artifact.yml should
@@ -15,19 +17,18 @@
 class Zithc < Formula
   desc "Zith programming language toolchain"
   homepage "https://github.com/GalaxyHaze/Zith-Lang"
-  license "MIT"
-
-  # build-artifact.yml updates the tagged archive URL and verified SHA-256.
-  version "0.6.4.0"
   url "https://github.com/GalaxyHaze/Zith-Lang/archive/ad377ee4393e460132aaf0a73167ef385dd95c1d.tar.gz"
+  version "0.6.4.0"
   sha256 "ac2694f45903ebc2bb782b528c8dc67454bb9d4f604416fa669a2b91f88de0b0"
+  # build-artifact.yml updates the tagged archive URL and verified SHA-256.
+  license "MIT"
 
   depends_on "cmake" => :build
   depends_on "ninja" => :build
   depends_on "llvm"
 
   def install
-    llvm_dir = Formula["llvm"].opt_lib/"cmake"/"llvm"
+    llvm_dir = formula_opt_lib("llvm")/"cmake"/"llvm"
     system "cmake", "-S", ".", "-B", "build", "-G", "Ninja",
            "-DCMAKE_BUILD_TYPE=Release",
            "-DZITH_HAS_LLVM=ON",
@@ -40,7 +41,7 @@ class Zithc < Formula
   end
 
   test do
-    assert_predicate bin/"zithc", :exist?
+    assert_path_exists bin/"zithc"
     assert_predicate share/"zith/stdlib", :directory?
     assert_match(/#{version}/, shell_output("#{bin}/zithc info"))
   end
