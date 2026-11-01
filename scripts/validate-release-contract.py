@@ -496,6 +496,16 @@ def validate_workflows(workflow_dir: Path) -> None:
     ):
         if marker not in scoop_section:
             fail(f"{artifact_workflow} Scoop setup is missing {marker}")
+    for marker in (
+        '$bucket = Join-Path $env:RUNNER_TEMP "zith-scoop-local"',
+        'Copy-Item -LiteralPath $manifest',
+        "git -C $bucket init --quiet",
+        "git -C $bucket add bucket/zithc.json",
+        "([System.Uri](Resolve-Path -LiteralPath $bucket).Path).AbsoluteUri",
+        "scoop bucket add zith-local $bucketUri",
+    ):
+        if marker not in scoop_section:
+            fail(f"{artifact_workflow} Scoop smoke bucket setup is missing {marker}")
     dispatch_start = smoke_text.find("  workflow_dispatch:")
     call_start = smoke_text.find("  workflow_call:")
     if dispatch_start < 0 or call_start < 0 or call_start <= dispatch_start:
@@ -604,6 +614,14 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail("Homebrew formula does not pass the keg-only LLVM CMake directory")
     if "-DZITH_REQUIRE_LLVM=ON" not in formula_text:
         fail("Homebrew formula does not require LLVM")
+    if "-DZITH_VERSION=v#{version}" not in formula_text:
+        fail("Homebrew formula does not set the compiler version from the release")
+    if 'shell_output("#{bin}/zithc --version")' not in formula_text:
+        fail("Homebrew formula does not test the compiler version")
+    if 'assert_path_exists share/"zith/stdlib"' not in formula_text:
+        fail("Homebrew formula does not test the installed standard library")
+    if "zithc info" in formula_text:
+        fail("Homebrew formula uses the unsupported zithc info command")
     for marker in (
         "scripts/update-scoop-manifest.py",
         "scripts/update-homebrew-formula.py",

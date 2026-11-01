@@ -849,8 +849,29 @@ jobs:
       - name: Install and run Scoop package
         shell: pwsh
         run: |
-          $bucket = Join-Path $env:GITHUB_WORKSPACE ".github\scoop"
-          scoop bucket add zith-local $bucket
+          $bucket = Join-Path $env:RUNNER_TEMP "zith-scoop-local"
+          $bucketManifest = Join-Path $bucket "bucket"
+          $manifest = Join-Path $env:GITHUB_WORKSPACE ".github\scoop\bucket\zithc.json"
+          New-Item -ItemType Directory -Path $bucketManifest -Force | Out-Null
+          Copy-Item -LiteralPath $manifest -Destination (Join-Path $bucketManifest "zithc.json")
+
+          git -C $bucket init --quiet
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not initialize the local Scoop bucket repository"
+          }
+          git -C $bucket add bucket/zithc.json
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not stage the local Scoop manifest"
+          }
+          git -C $bucket -c "user.name=github-actions[bot]" `
+            -c "user.email=41898282+github-actions[bot]@users.noreply.github.com" `
+            commit --quiet -m "Add Zith Scoop manifest"
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not commit the local Scoop manifest"
+          }
+
+          $bucketUri = ([System.Uri](Resolve-Path -LiteralPath $bucket).Path).AbsoluteUri
+          scoop bucket add zith-local $bucketUri
           scoop install zithc
           zithc --help | Out-Null
           if ($LASTEXITCODE -ne 0) {

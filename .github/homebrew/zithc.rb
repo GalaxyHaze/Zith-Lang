@@ -33,6 +33,7 @@ class Zithc < Formula
            "-DCMAKE_BUILD_TYPE=Release",
            "-DZITH_HAS_LLVM=ON",
            "-DZITH_REQUIRE_LLVM=ON",
+           "-DZITH_VERSION=v#{version}",
            "-DZITH_ENABLE_C_COMPILE=OFF",
            "-DLLVM_DIR=#{llvm_dir}",
            "-DCMAKE_INSTALL_PREFIX=#{prefix}"
@@ -42,7 +43,8 @@ class Zithc < Formula
 
   test do
     assert_path_exists bin/"zithc"
-    assert_predicate share/"zith/stdlib", :directory?
-    assert_match(/#{version}/, shell_output("#{bin}/zithc info"))
+    assert_path_exists share/"zith/stdlib"
+    assert_match(/Version:\s+v#{Regexp.escape(version)}/,
+                 shell_output("#{bin}/zithc --version"))
   end
 end
