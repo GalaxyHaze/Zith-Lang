@@ -10,8 +10,8 @@
         "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.4.2/zithc-stdlib-v0.6.4.2.zip"
       ],
       "hash": [
-        "c691af085e9a06f01c61c3ad34a129745eb936eec9f812dcb35c4602e988be06",
-        "39401eff1902ad037e7d5687cfd169c5d0bcbd9016c6b28ada24ac87c3e24fc1"
+        "8c827a05bff425ca6adf6e051b0c26ed549f37bde318fcdaf10470e7a4767773",
+        "49bbb399ebf06ace9fed8108cf1e856e3fdd3bddaaf5049e27b49e4c855321a0"
       ]
     },
     "arm64": {
@@ -20,8 +20,8 @@
         "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.4.2/zithc-stdlib-v0.6.4.2.zip"
       ],
       "hash": [
-        "8eef06bba3e5d5f879e6acb5e8191cc449511787e76f81cbfbc6d36cb639e577",
-        "39401eff1902ad037e7d5687cfd169c5d0bcbd9016c6b28ada24ac87c3e24fc1"
+        "f638613e3f6acf34c8b19c6e538db2446cb417abfb1458b9b372fdbf28324a5b",
+        "49bbb399ebf06ace9fed8108cf1e856e3fdd3bddaaf5049e27b49e4c855321a0"
       ]
     }
   },
