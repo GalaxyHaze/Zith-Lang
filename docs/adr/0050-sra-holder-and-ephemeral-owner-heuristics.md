@@ -43,13 +43,12 @@ SRA gains two heuristics and nothing else.
 
 The `component`/`struct` split is intended to be sound as a value/object
 distinction because `component` is restricted by construction: it may hold only
-primitives, other components, and arrays of those, so it cannot carry a cleanup
-obligation. That restriction is documented in `docs/03-type-system.md` (section
-3.5) but is not enforced by the compiler today: `component Bad { s: S }`,
-`component Bad { p: ?*i32 }`, and `component Bad: Trait { x: i32 }` all pass
-`zithc check`. Enforcing the `component` field restriction (no `struct`/`union`/
-pointer fields) is therefore a prerequisite for the soundness claim, not a
-given.
+primitives, integer-backed enums, other components, and arrays or slices of
+those. The sema enforces this restriction for local declarations and substituted
+generic fields, including imported generic components. It rejects struct,
+union, pointer, optional, and other non-value fields, along with base-type
+declarations and explicit trait implementations. This enforcement is required
+for the soundness claim, rather than an assumption.
 
 Cleanup stays explicit. A held owner is released through `defer` (or a direct
 `destroy` call), never through an implicit drop hook. The holder heuristic exists
