@@ -483,6 +483,16 @@ def validate_workflows(workflow_dir: Path) -> None:
     scoop_section = job_section(artifact_text, "smoke-scoop")
     if "needs: [create-release, release-maintenance]" not in scoop_section:
         fail(f"{artifact_workflow} runs Scoop smoke before release maintenance")
+    scoop_setup = scoop_section.find("- name: Set up Scoop")
+    scoop_validation = scoop_section.find("- name: Validate Scoop is available")
+    if scoop_setup < 0 or scoop_validation < scoop_setup:
+        fail(f"{artifact_workflow} must install Scoop before validating its availability")
+    for marker in (
+        "Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression",
+        "$scoopShims | Out-File -FilePath $env:GITHUB_PATH",
+    ):
+        if marker not in scoop_section:
+            fail(f"{artifact_workflow} Scoop setup is missing {marker}")
     dispatch_start = smoke_text.find("  workflow_dispatch:")
     call_start = smoke_text.find("  workflow_call:")
     if dispatch_start < 0 or call_start < 0 or call_start <= dispatch_start:

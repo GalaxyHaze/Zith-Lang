@@ -52,6 +52,17 @@ on hosted macOS runners before these release changes are considered verified.
 
 ## Smoke Check
 
+The `smoke-scoop` job must bootstrap Scoop because the hosted Windows runner
+used in run `41320220775` did not provide the `scoop` command. The job uses the
+upstream `get.scoop.sh` installer, verifies the shim under
+`$USERPROFILE\scoop\shims`, and exports that directory through `GITHUB_PATH`.
+Keep checkout credentials unpersisted while the remote installer runs.
+
+The release workflow updates distribution metadata before `smoke-scoop` and
+`publish-release`. A failed Scoop smoke can therefore leave `main` pointing at
+a release that is still a draft. Treat test-tag dispatches as a public
+distribution change, not as an isolated build.
+
 ```bash
 zithc --include /usr/local/share/zith/stdlib check examples/hello-world.zith
 ```

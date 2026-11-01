@@ -820,6 +820,21 @@ jobs:
           ref: main
           fetch-depth: 1
           token: ${{ secrets.RELEASE_PAT }}
+          persist-credentials: false
+
+      - name: Set up Scoop
+        shell: pwsh
+        run: |
+          Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
+          Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+
+          $scoopShims = Join-Path $env:USERPROFILE "scoop\shims"
+          $scoopCommand = Join-Path $scoopShims "scoop.ps1"
+          if (-not (Test-Path -LiteralPath $scoopCommand)) {
+            throw "Scoop installation did not create its command shim"
+          }
+          $scoopShims | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          $env:PATH = "$scoopShims;$env:PATH"
 
       - name: Validate Scoop is available
         shell: pwsh
