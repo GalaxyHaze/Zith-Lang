@@ -171,6 +171,18 @@ be a macro and needs a function, a collection argument, or a compiler form.
 `@sync` takes one lock value and one block, so the fixed arity is not a
 limitation for it.
 
+Adding macro variadics is possible but is a compiler feature, not a library
+one. The pieces a `@destroy(vals...)` would need are: a rest marker in the
+macro parameter list, a macro argument kind that accepts a trailing list, the
+arity check relaxed to a minimum, and a splice that expands the captured list
+in the macro body. The macro body is an ordinary block, so the captured list
+has no existing expansion syntax. `..` today is `PipeCurrent` inside a pipeline
+and a range operator elsewhere, not a general spread, so a new splice form
+would be required. A variadic macro is also homogeneous only if it reuses the
+`[...]T` slice model, which rules out a mixed list. This is out of scope for
+the thread library. A function that takes a `[...]T` slice already covers the
+homogeneous `destroy` case.
+
 A macro can be exported with `pub` and called through a module alias, so
 `@share.sync(val, { ... })` works when the macro is public in the imported
 module. The sugar can therefore live beside `Share` in a `soon/thread/share`
