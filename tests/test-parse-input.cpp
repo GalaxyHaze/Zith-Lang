@@ -37,6 +37,13 @@ struct SessionRunner {
         std::filesystem::remove_all(root);
     }
 
+    void write(std::string_view name, std::string_view text) {
+        const auto path = root / name;
+        std::filesystem::create_directories(path.parent_path());
+        std::ofstream file(path, std::ios::binary | std::ios::trunc);
+        file << text;
+    }
+
     struct Result {
         bool ok         = false;
         bool reachedHir = false;
@@ -70,11 +77,12 @@ struct SessionRunner {
     };
 
     Result run(std::string_view input, session::Stage target = session::Stage::TypeChecked) {
-        const auto path = root / "main.zith";
-        std::ofstream file(path, std::ios::binary | std::ios::trunc);
-        file << input;
-        file.close();
+        write("main.zith", input);
+        return runMain(target);
+    }
 
+    Result runMain(session::Stage target = session::Stage::TypeChecked) {
+        const auto path = root / "main.zith";
         session::FrontendConfig config;
         config.workspaceRoot      = root.string();
         config.maxFrontendWorkers = 1;
@@ -127,6 +135,54 @@ void test_primitive_casts_type_check() {
                    session::Stage::HirLowered);
     CHECK(r.ok && r.reachedHir,
           "all primitive cast<T> calls type-check and lower through ParseInput");
+}
+
+void test_component_field_constraints() {
+    SessionRunner valid;
+    const auto accepted = valid.run("component Vec2 { x: f32, y: f32 }\n"
+                                    "component Batch { values: [4]Vec2, samples: []f32 }\n"
+                                    "fn main(): i32 { return 0; }\n");
+    CHECK(accepted.ok, "components accept primitives, nested components, arrays, and slices");
+
+    SessionRunner invalid;
+    const auto rejected =
+        invalid.run("struct Handle { value: i32 }\n"
+                    "component HasStruct { value: Handle }\n"
+                    "component HasPointer { value: *i32 }\n"
+                    "component HasOptional { value: ?*i32 }\n"
+                    "component HasBase: Handle { value: i32 }\n"
+                    "trait Marker { fn mark(self): i32; }\n"
+                    "component Marked { value: i32 }\n"
+                    "implement Marked as Marker { fn mark(self): i32 { return self.value; } }\n"
+                    "fn main(): i32 { return 0; }\n");
+    CHECK(!rejected.ok, "components reject non-POD fields and base/trait declarations");
+    CHECK(rejected.hasErrorCode(diagnostics::err::TypeMismatch),
+          "invalid component declarations report a semantic type error");
+    CHECK(rejected.hasMessage("components cannot implement traits"),
+          "components cannot implement traits through an implement block");
+}
+
+void test_generic_component_rejects_non_pod_instantiation() {
+    SessionRunner t;
+    const auto rejected = t.run("component Box<T> { value: T }\n"
+                                "fn take(box: Box<*i32>) {}\n"
+                                "fn main(): i32 { return 0; }\n");
+    CHECK(!rejected.ok, "generic component instantiation validates substituted field types");
+    CHECK(rejected.hasErrorCode(diagnostics::err::TypeMismatch),
+          "non-POD generic component instantiation reports a semantic type error");
+    CHECK_EQ(rejected.errorCount(), 1u, "generic component violation is reported only once");
+}
+
+void test_imported_generic_component_constraints() {
+    SessionRunner t;
+    t.write("dep.zith", "pub component Box<T> { value: T }\n");
+    t.write("main.zith", "from dep\n"
+                         "fn take(box: Box<*i32>) {}\n"
+                         "fn main(): i32 { return 0; }\n");
+    const auto rejected = t.runMain();
+    CHECK(!rejected.ok, "imported generic components enforce substituted field constraints");
+    CHECK(rejected.hasErrorCode(diagnostics::err::TypeMismatch),
+          "an invalid imported component instantiation reports a semantic type error");
 }
 
 void test_cast_does_not_consume_line() {
@@ -245,6 +301,9 @@ void test_noalias_requires_pointer_return() {
 
 void test_parse_input() {
     test_primitive_casts_type_check();
+    test_component_field_constraints();
+    test_generic_component_rejects_non_pod_instantiation();
+    test_imported_generic_component_constraints();
     test_cast_does_not_consume_line();
     test_nonparsable_type_reports_constraint_error();
     test_println_with_i32_lowers_to_hir();

@@ -795,7 +795,7 @@ GenericInstantiationPass::substituteType(const sema::modern::TypeId type,
                 return existing;
             const sema::modern::TypeId reified =
                 type_table_.internStruct(concrete, fields, &st->field_names, &meta, &args,
-                                         st->explicit_alignment);
+                                         st->explicit_alignment, st->isComponent);
             type_table_.setDefiningModule(reified, type_table_.definingModule(resolved));
             type_table_.registerNamed(concrete, reified);
             return reified;

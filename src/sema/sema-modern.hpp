@@ -186,6 +186,11 @@ private:
     TypeId registerPrimitive(std::string_view name, TypeKind kind, uint8_t bits, bool is_signed);
     void registerNamedTypes();
     void lowerDeclarationTypes();
+    void checkComponentDeclarations();
+    void checkComponentFields(const frontend::Declaration &decl, TypeId type,
+                              bool allow_generic_params);
+    [[nodiscard]] bool isComponentFieldType(TypeId type, bool allow_generic_params,
+                                            std::vector<TypeId> &active_types) const;
     void inferExpressionTypes();
     void inferExpressionTypesForDecls();
     void prepareStateMachineGrouping();
@@ -293,6 +298,9 @@ private:
     /// instantiated in a type expression. `lowerTypeExpr` checks these before
     /// the declaration bindings so `Pair<i32,f64>` fields see `i32`/`f64`.
     std::vector<GenericBinding> activeTemplateArgs_;
+    /// Component field checks can be reached from repeated type-lowering
+    /// probes that intern structurally identical generic arguments separately.
+    memory::FlatSet<std::string> reportedComponentFieldErrors_;
     /// Decl id of the declaration currently being lowered or inferred (0 = none).
     uint32_t currentDeclId_ = 0;
     /// Labels of loops currently being inferred. A non-empty label must be

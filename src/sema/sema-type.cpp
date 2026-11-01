@@ -641,7 +641,10 @@ TypeId PerModuleSema::instantiateTemplateFromArgs(frontend::TextSpan span,
         }
         const TypeId st =
             type_table.internStruct(concrete_name, fields, &field_names, &field_meta, &args,
-                                    field_sema->requestedStructAlignment(template_decl));
+                                    field_sema->requestedStructAlignment(template_decl),
+                                    template_decl.isComponent);
+        if (template_decl.isComponent)
+            field_sema->checkComponentFields(template_decl, st, false);
         const std::string_view defining_module =
             type_table.definingModule(type_table.lookupNamed(template_decl.name));
         type_table.setDefiningModule(st, defining_module);

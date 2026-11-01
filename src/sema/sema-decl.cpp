@@ -300,7 +300,8 @@ void PerModuleSema::lowerDeclarationTypes() {
                 fld_names.push(std::string_view(buf, param.name.size()));
             }
             TypeId st = type_table.internStruct(decl.name, fields, &fld_names, &field_meta,
-                                                nullptr, requestedStructAlignment(decl));
+                                                nullptr, requestedStructAlignment(decl),
+                                                decl.isComponent);
             setDeclType(decl.id, st);
             type_table.registerNamed(decl.name, st);
             break;
@@ -599,7 +600,106 @@ void PerModuleSema::lowerDeclarationTypes() {
             break;
         }
     }
+    checkComponentDeclarations();
 }
+
+bool PerModuleSema::isComponentFieldType(const TypeId type, const bool allow_generic_params,
+                                        std::vector<TypeId> &active_types) const {
+    if (!type)
+        return false;
+
+    const TypeKind original_kind = type_table.kindOf(type_table.canonical(type));
+    if (original_kind == TypeKind::Qualified)
+        return false;
+
+    const TypeId resolved = type_table.stripQualifiers(type);
+    switch (type_table.kindOf(resolved)) {
+    case TypeKind::Bool:
+    case TypeKind::Char:
+    case TypeKind::Integer:
+    case TypeKind::Float:
+        return true;
+    case TypeKind::Enum: {
+        const auto *enum_type = type_table.enum_type(resolved);
+        return enum_type != nullptr &&
+               type_table.kindOf(type_table.stripQualifiers(enum_type->underlying)) ==
+                   TypeKind::Integer;
+    }
+    case TypeKind::Array: {
+        const auto *array_type = type_table.array(resolved);
+        return array_type != nullptr &&
+               isComponentFieldType(array_type->element, allow_generic_params, active_types);
+    }
+    case TypeKind::Slice: {
+        const auto *slice_type = type_table.slice(resolved);
+        return slice_type != nullptr &&
+               isComponentFieldType(slice_type->element, allow_generic_params, active_types);
+    }
+    case TypeKind::Struct: {
+        const auto *struct_type = type_table.struct_type(resolved);
+        if (struct_type == nullptr || !struct_type->isComponent ||
+            std::find(active_types.begin(), active_types.end(), resolved) != active_types.end())
+            return false;
+
+        active_types.push_back(resolved);
+        for (const TypeId field_type : struct_type->fields) {
+            if (!isComponentFieldType(field_type, allow_generic_params, active_types)) {
+                active_types.pop_back();
+                return false;
+            }
+        }
+        active_types.pop_back();
+        return true;
+    }
+    case TypeKind::GenericParam:
+        return allow_generic_params;
+    default:
+        return false;
+    }
+}
+
+void PerModuleSema::checkComponentFields(const frontend::Declaration &decl, const TypeId type,
+                                         const bool allow_generic_params) {
+    const TypeId resolved_type = type_table.stripQualifiers(type);
+    const auto *struct_type    = type_table.struct_type(resolved_type);
+    if (struct_type == nullptr || !struct_type->isComponent)
+        return;
+
+    const size_t field_count = std::min(decl.parameters.size(), struct_type->fields.size());
+    for (size_t index = 0; index < field_count; ++index) {
+        std::vector<TypeId> active_types{type_table.stripQualifiers(type)};
+        if (isComponentFieldType(struct_type->fields[index], allow_generic_params, active_types))
+            continue;
+        if (type_table.kindOf(type_table.stripQualifiers(struct_type->fields[index])) ==
+            TypeKind::Error)
+            continue;
+        std::string diagnostic_key(struct_type->name);
+        diagnostic_key += "#";
+        diagnostic_key += std::to_string(index);
+        if (!reportedComponentFieldErrors_.insert(std::move(diagnostic_key)))
+            continue;
+        const auto &field = decl.parameters[index];
+        report(field.span,
+               "component field '" + field.name + "' has type '" +
+                   type_table.typeToString(struct_type->fields[index]) +
+                   "'; expected a primitive, component, array, or slice of these",
+               diagnostics::err::TypeMismatch);
+    }
+}
+
+void PerModuleSema::checkComponentDeclarations() {
+    for (const auto &decl : snapshot.declarations()) {
+        if (decl.kind != frontend::DeclKind::Struct || !decl.isComponent)
+            continue;
+        if (decl.declaredType) {
+            report(decl.span, "component '" + decl.name + "' cannot declare a base type or trait",
+                   diagnostics::err::TypeMismatch);
+        }
+        checkComponentFields(decl, typeOfDecl(decl.id),
+                             !decl.genericParams.empty());
+    }
+}
+
 void PerModuleSema::checkImplementBlocks() {
     // Group method declarations by `(owner, trait)` so an empty implement block
     // is still checked for duplicate implementation and missing requirements.
@@ -702,6 +802,13 @@ void PerModuleSema::checkImplementBlocks() {
         const TypeId trait_type = type_table.lookupNamed(group.trait->name);
         if (!owner_type || !trait_type)
             continue;
+        const auto *component =
+            type_table.struct_type(type_table.stripQualifiers(owner_type));
+        if (component != nullptr && component->isComponent) {
+            report(group.span, "components cannot implement traits",
+                   diagnostics::err::TypeMismatch);
+            continue;
+        }
         type_table.conformanceTable().registerConformance(owner_type, trait_type);
         // Validate every trait requirement without a default against the impl.
         for (const auto &requirement : snapshot.declarations()) {
