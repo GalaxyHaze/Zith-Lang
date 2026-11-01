@@ -371,6 +371,28 @@ current thread discussion, it is distinct from the blueprint and is not
 consumed by `merge`.
 _Avoid_: job blueprint, merge handle
 
+**Executor**:
+The runtime object that owns a work queue and a worker pool and runs submitted
+state machines step by step. It is not a single thread and not the `dock`
+caller.
+_Avoid_: worker, thread handle, runtime scheduler
+
+**Executor worker**:
+One thread in an executor's pool that runs a single step of a task. Different
+steps of one task may run on different workers.
+_Avoid_: executor, thread handle
+
+**I/O task**:
+A submitted state machine together with its context, tracked by a handle until
+it reaches a terminal value or is canceled. It is distinct from a `Thread<T>`
+handle.
+_Avoid_: thread handle, future, job blueprint
+
+**Task context**:
+The value an executor owns across the steps of one task and lends exclusively
+to a step while it runs. Every step of a task receives the same context type.
+_Avoid_: capture, environment
+
 **Playground runtime**:
 The browser-facing WASM module that checks Zith source, prepares HIR, and
 executes it through the VM v2 IR with the same language and standard-library

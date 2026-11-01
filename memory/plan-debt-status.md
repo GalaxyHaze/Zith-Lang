@@ -58,6 +58,8 @@ The active plan homes are:
   `stdlib/soon/json.zith` stub.
 - `docs/plans/stdlib/soon-random.md`: random generator and uniform-distribution
   surface for a proposed `soon/random` module, drawing stage.
+- `docs/plans/stdlib/soon-io.md`: executor, task, and non-blocking I/O surface
+  for a proposed `soon/io` module, drawing stage.
 
 The archived plan homes are:
 
