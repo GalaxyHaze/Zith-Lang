@@ -44,6 +44,8 @@ The active plan homes are:
 - `docs/plans/forward-dispatch.md`: Zith-- call-site overload selection from a
   union or `opaque` tag, drawing stage. The enum level is deferred to a
   separate full-Zith unit.
+- `docs/plans/variadic-macros-and-defer.md`: variadic macro statement
+  repetition and caller-scope cleanup registration, drawing stage.
 - `docs/plans/abi/explicit-alignment.md`: Zith-- type and binding alignment,
   currently promising and pending idea-owner review.
 - `docs/plans/stdlib/allocator-ownership.md`: explicit allocator ownership and

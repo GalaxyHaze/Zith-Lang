@@ -59,9 +59,11 @@ Rules:
 - Sema records the deferred expression on the nearest lexical block; HIR
   lowering appends the cleanup sequence before that block's terminator.
 
-`defer` is rejected inside macro templates by the parser's clean control-flow
-diagnostic; ordinary macros whose expanded bodies contain `defer` follow the
-normal parser/sema path.
+`defer` statements in macro templates are cloned into the expanded code and
+follow the normal sema path. A `raw macro` that expands to `defer` currently
+registers cleanup at the expansion boundary rather than the surrounding
+caller block. The proposed caller-block behavior for variadic cleanup macros
+is tracked in [the variadic macro drawing](variadic-macros-and-defer.md).
 
 ### `drop`
 

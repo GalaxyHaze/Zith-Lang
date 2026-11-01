@@ -164,45 +164,9 @@ The block-as-argument spelling is accepted. The `@sync(val, { ... })` form is
 the shipped spelling for the synchronization sugar, and no parser change is
 wanted for it. The trailing-block form stays out of scope.
 
-Zith-- macros are not variadic. The arity check requires exactly as many
-arguments as declared parameters, so a macro cannot accept a trailing list of
-arguments. The fixed-arity macro `raw macro destroy(a: identifier,
-b: identifier)` can already expand `@destroy(vec, arena)` into two method
-calls, even when the receiver types differ. Macros with the same name cannot
-currently be overloaded by arity, so a family of fixed-arity `destroy` macros
-is not a scalable substitute.
-
-The intended cleanup may need to be deferred rather than performed at the
-macro call. A raw macro that itself expands to `defer { a.destroy(); }`
-registers that defer at the expansion boundary, so it runs before execution
-continues after the macro call. To defer cleanup until the caller's lexical
-block exits today, put the ordinary fixed-arity macro call inside an explicit
-defer block:
-
-```zith
-defer { @destroy(vec, arena); }
-```
-
-This form was verified to read both values before leaving the block and destroy
-them on block exit. A future `@destroy(vec, arena)` that registers cleanup by
-itself would need a macro/runtime rule that attaches the generated defer to the
-caller's lexical block instead of the macro expansion boundary.
-
-Adding macro variadics is possible but is a compiler feature, not a library
-one. A heterogeneous call such as `@destroy(vec, arena)` is a good use case:
-each argument can have a different type and expand to its own `.destroy()`
-method call. The function variadic slice `[...]T` is not equivalent because
-all its elements must have the same type.
-
-The macro feature needs a rest parameter that captures the trailing arguments,
-an arity rule that permits the tail, and an explicit repetition form in the
-macro body that emits statements once per captured argument. The body is an
-ordinary block today, so it has no repetition syntax. `..` is `PipeCurrent`
-inside a pipeline and a range operator elsewhere, not a general spread. The
-repetition must also define source-order expansion and whether an empty tail is
-allowed. No syntax or behavior is decided here, and this feature remains out
-of scope for `soon/thread`. If the macro means deferred destruction, its
-contract must also state which lexical block owns the cleanup registration.
+Variadic macro repetition and caller-scope cleanup are tracked in the separate
+[language drawing](../variadic-macros-and-defer.md), not as part of this thread
+module.
 
 A macro can be exported with `pub` and called through a module alias, so
 `@share.sync(val, { ... })` works when the macro is public in the imported

@@ -32,6 +32,14 @@ _Avoid_: C macro, comptime function, inline function
 The declared contract for a Zith-- macro parameter: `val`, `identifier`, or `ast`.
 _Avoid_: parameter meta-type, metatype, expr parameter, body parameter
 
+**Variadic macro parameter**:
+A final macro parameter that binds an ordered tail of zero or more call-site arguments.
+_Avoid_: macro slice, argument spread
+
+**Macro statement repetition**:
+A template operation that emits one statement for each argument bound to a variadic macro parameter, preserving argument order.
+_Avoid_: runtime loop, function variadic
+
 **Zith-- macro value argument**:
 An evaluated argument produced by normal call-site expression semantics, without explicit unevaluated syntax.
 _Avoid_: expression parameter, value expression, evaluated expression
