@@ -824,9 +824,12 @@ jobs:
 
       - name: Set up Scoop
         shell: pwsh
+        env:
+          CI: true
         run: |
           Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process -Force
           Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression
+          $installExitCode = $LASTEXITCODE
 
           $scoopShims = Join-Path $env:USERPROFILE "scoop\shims"
           $scoopCommand = Join-Path $scoopShims "scoop.ps1"
@@ -835,6 +838,9 @@ jobs:
           }
           $scoopShims | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           $env:PATH = "$scoopShims;$env:PATH"
+          if ($null -ne $installExitCode -and $installExitCode -ne 0) {
+            exit $installExitCode
+          }
 
       - name: Validate Scoop is available
         shell: pwsh

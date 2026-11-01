@@ -488,8 +488,11 @@ def validate_workflows(workflow_dir: Path) -> None:
     if scoop_setup < 0 or scoop_validation < scoop_setup:
         fail(f"{artifact_workflow} must install Scoop before validating its availability")
     for marker in (
+        "          CI: true",
         "Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression",
+        "$installExitCode = $LASTEXITCODE",
         "$scoopShims | Out-File -FilePath $env:GITHUB_PATH",
+        "exit $installExitCode",
     ):
         if marker not in scoop_section:
             fail(f"{artifact_workflow} Scoop setup is missing {marker}")
