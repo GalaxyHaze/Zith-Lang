@@ -114,6 +114,10 @@ A runtime-tagged value that contains one of its declared member types, which may
 heterogeneous.
 _Avoid_: enum
 
+**Anonymous state**:
+A `state` literal without a source-level name that produces a state value for a state machine.
+_Avoid_: state closure
+
 **Trait**:
 A named nominal contract for behavior or capabilities that a type explicitly implements.
 _Avoid_: interface
