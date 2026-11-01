@@ -151,6 +151,15 @@ The trailing-block form `@sync(val) { ... }` is not part of the macro call
 grammar and fails with an arity error. Supporting that form would need a parser
 change and is out of scope here.
 
+A `raw` macro does not rescue the trailing-block spelling. A raw macro is
+invoked the same way, `@sync(val)`, and its body is spliced as statements. The
+splice runs before the following block, and the `defer` it introduces is
+scoped to the macro expansion, so `val.unlock()` runs before the following
+block starts. The block then runs unlocked, which is a silent correctness bug
+rather than a syntax error. The block-as-argument form keeps `lock` and
+`unlock` around the block because the block is the macro's own statement. Use
+`@sync(val, { ... })`.
+
 ## Errors
 
 `ThreadError` is an enum with named variants. The first variants are
