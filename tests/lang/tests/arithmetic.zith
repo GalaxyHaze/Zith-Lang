@@ -1,0 +1,30 @@
+// Language corpus: integer arithmetic and comparison operators.
+#[test]
+fn addition_and_subtraction() {
+    @assert(2 + 3 == 5);
+    @assert(10 - 4 == 6);
+    @assert(2 + 3 - 1 == 4);
+}
+
+#[test]
+fn multiplication_and_division() {
+    @assert(6 * 7 == 42);
+    @assert(20 / 4 == 5);
+    @assert(21 % 5 == 1);
+}
+
+#[test]
+fn comparison_operators() {
+    @assert(3 < 4);
+    @assert(4 <= 4);
+    @assert(5 > 2);
+    @assert(5 >= 5);
+    @assert(3 == 3);
+    @assert(3 != 4);
+}
+
+#[test]
+fn operator_precedence() {
+    @assert(2 + 3 * 4 == 14);
+    @assert((2 + 3) * 4 == 20);
+}

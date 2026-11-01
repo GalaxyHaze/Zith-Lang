@@ -566,6 +566,16 @@ if(BUILD_TESTING AND NOT ZITH_IS_WASM)
                 ZITHC_BINARY="$<TARGET_FILE:zithc>")
             add_dependencies(test-stdlib-parity zithc)
             set_tests_properties(test-stdlib-parity PROPERTIES SKIP_RETURN_CODE 77)
+
+            # Language corpus: every `.zith` under tests/lang/ is run through
+            # `zithc test`, so language-level regressions can be added as data
+            # without a new C++ harness.
+            add_zith_test(test-lang-corpus tests/test-lang-corpus.cpp)
+            target_compile_definitions(test-lang-corpus PRIVATE
+                ZITHC_BINARY="$<TARGET_FILE:zithc>"
+                ZITH_LANG_CORPUS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/tests/lang"
+                ZITH_LANG_CORPUS_WORKDIR="${CMAKE_CURRENT_BINARY_DIR}/lang-corpus-run")
+            add_dependencies(test-lang-corpus zithc)
         endif()
     endif()
 
