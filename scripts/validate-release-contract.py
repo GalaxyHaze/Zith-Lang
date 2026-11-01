@@ -421,7 +421,13 @@ def validate_workflows(workflow_dir: Path) -> None:
     if "group: zith-distribution-metadata" not in distribution_section:
         fail(f"{maintenance_workflow} does not serialize distribution metadata updates")
     for marker in (
-        "scripts/update-scoop-manifest.py",
+        "name: Checkout validated release source",
+        "ref: ${{ needs.validate-release-source.outputs.source_sha }}",
+        "path: release-source",
+        "cp release-source/.github/scoop/bucket/zithc.json",
+        "release-source/scripts/update-scoop-manifest.py",
+        "release-source/scripts/validate-release-contract.py",
+        "--workflow-dir release-source/.github/workflows",
         "scripts/update-homebrew-formula.py",
         "zithc-stdlib-$RELEASE_TAG.zip",
         'archive/${SOURCE_SHA}.tar.gz',
