@@ -4552,8 +4552,41 @@ static void test_invalid_ir_refuses_object_emission() {
     CHECK(refused, "the refusal is reported as a diagnostic rather than crashing");
 
     // Even on the failure path the module itself stays well-formed: no unterminated block.
-    CHECK(cg.printIR().find("unreachable") != std::string::npos,
+  CHECK(cg.printIR().find("unreachable") != std::string::npos,
           "the unemittable block is closed with 'unreachable' instead of left open");
+}
+
+static void test_failed_let_initializer_reports_emission_error() {
+    memory::Arena arena;
+    memory::StringInterner interner(arena);
+    types::TypeIntern types(arena, interner);
+    hir::HirModule hir(arena);
+
+    auto &fn       = hir.addFn(interner.intern("broken_let"));
+    fn.hasBody     = true;
+    fn.return_type = types::kVoidType;
+    auto &block    = fn.blocks.emplace(arena);
+
+    hir::HirVar missing;
+    missing.name     = interner.intern("missing");
+    const auto value = hir.addExpr(missing);
+    hir::HirLet let;
+    let.name = interner.intern("local");
+    let.type = types.internInt(types::IntWidth::I32);
+    let.init = value;
+    block.insts.push(hir.addExpr(let));
+    block.terminator = hir.addExpr(hir::HirRet{hir::kInvalidHirExpr});
+
+    diagnostics::DiagnosticEngine diags(arena);
+    codegen::CodeGen cg(interner, types, {}, 0, &diags);
+    cg.emit(hir, "broken-let-module");
+
+    CHECK(cg.hasInvalidIR(), "failed let initializer marks the module invalid");
+    bool reported = false;
+    for (const auto &diag : diags.all())
+        if (diag.message.find("failed to emit an instruction") != std::string::npos)
+            reported = true;
+    CHECK(reported, "failed let initializer produces a codegen diagnostic");
 }
 
 static void test_codegen() {
@@ -4846,6 +4879,8 @@ static void test_codegen() {
     test_radix_literal_return_emits_valid_module();
     printf("Running test_invalid_ir_refuses_object_emission\n");
     test_invalid_ir_refuses_object_emission();
+    printf("Running test_failed_let_initializer_reports_emission_error\n");
+    test_failed_let_initializer_reports_emission_error();
     printf("Running test_layout_api_matches_llvm\n");
     test_layout_api_matches_llvm();
     printf("Running test_raw_union_runtime_reinterpret\n");

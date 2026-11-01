@@ -2239,14 +2239,25 @@ auto lowerOperand(LowerState &state, hir::HirExprId id) -> std::uint16_t {
             [&](const hir::HirCall &call) { return lowerCall(state, call); },
             [&](const hir::HirPipe &pipe) -> std::uint16_t {
                 const auto stage = lowerOperand(state, pipe.stage);
-                if (stage == kUnassignedReg)
-                    return kUnassignedReg;
-                if (!pipe.is_effect)
+                if (!pipe.is_effect) {
+                    if (stage == kUnassignedReg)
+                        return kUnassignedReg;
                     return stage;
+                }
+                if (!state.result->ok)
+                    return kUnassignedReg;
                 return lowerSlotValue(state, pipe.source_slot, pipe.source_type);
             },
             [&](const hir::HirPipeCurrent &current) {
                 return lowerSlotValue(state, current.slot, current.type);
+            },
+            [&](const hir::HirCleanup &cleanup) -> std::uint16_t {
+                for (const auto cleanup_expr : cleanup.exprs) {
+                    (void)lowerOperand(state, cleanup_expr);
+                    if (!state.result->ok)
+                        return kUnassignedReg;
+                }
+                return kUnassignedReg;
             },
             [&](const auto &) -> std::uint16_t {
                 // An unhandled HIR node must fail the lowering instead of

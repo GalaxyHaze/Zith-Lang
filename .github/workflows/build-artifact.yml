@@ -231,6 +231,7 @@ jobs:
               -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
+              -DCMAKE_EXE_LINKER_FLAGS=-Wl,-headerpad_max_install_names
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
 
           - os: macos-15-intel
@@ -240,6 +241,7 @@ jobs:
               -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
+              -DCMAKE_EXE_LINKER_FLAGS=-Wl,-headerpad_max_install_names
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
 
           - os: windows-latest
@@ -525,14 +527,26 @@ jobs:
         shell: bash
         run: |
           mkdir -p artifacts
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            cp build/zithc "artifacts/${{ matrix.target_name }}"
+          elif [ "${{ runner.os }}" = "Windows" ]; then
             cp build/zithc.exe "artifacts/${{ matrix.target_name }}"
           else
             chmod +x build/zithc
             cp build/zithc "artifacts/${{ matrix.target_name }}"
           fi
 
+      - name: Stage macOS compiler for runtime packaging
+        if: runner.os == 'macOS'
+        uses: actions/upload-artifact@v4
+        with:
+          name: compiler-${{ matrix.target_name }}
+          path: artifacts/${{ matrix.target_name }}
+          if-no-files-found: error
+          retention-days: 1
+
       - name: Upload release asset
+        if: runner.os != 'macOS'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
@@ -699,6 +713,8 @@ jobs:
             --pattern "zithc-linux-arm64-musl" \
             --pattern "zithc-macos-amd64" \
             --pattern "zithc-macos-arm64" \
+            --pattern "zith-macos-runtime-amd64.tar.gz" \
+            --pattern "zith-macos-runtime-arm64.tar.gz" \
             --pattern "zithc-windows-amd64.exe" \
             --pattern "zithc-windows-arm64.exe" \
             --pattern "zithc-stdlib-${TAG}.tar.gz" \
@@ -825,7 +841,7 @@ jobs:
           }
 
   build-lsp:
-    needs: [create-release, build-windows-arm64-llvm]
+    needs: [create-release, build-windows-arm64-llvm, build-main]
     name: Build zith-lsp-${{ matrix.target_name }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -848,20 +864,24 @@ jobs:
 
           - os: macos-14
             target_name: macos-arm64
+            runtime_arch: arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(xcrun -f clang)
               -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
+              -DCMAKE_EXE_LINKER_FLAGS=-Wl,-headerpad_max_install_names
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
 
           - os: macos-15-intel
             target_name: macos-amd64
+            runtime_arch: amd64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(xcrun -f clang)
               -DCMAKE_CXX_COMPILER=$(xcrun -f clang++)
               -DCMAKE_AR=$(xcrun -f ar)
               -DCMAKE_RANLIB=$(xcrun -f ranlib)
+              -DCMAKE_EXE_LINKER_FLAGS=-Wl,-headerpad_max_install_names
               -DLLVM_DIR=$(brew --prefix llvm)/lib/cmake/llvm
 
           - os: windows-latest
@@ -1166,11 +1186,31 @@ jobs:
           cd tests
           python3 -m unittest test_lsp -v
 
+      - name: Download macOS compiler for runtime packaging
+        if: runner.os == 'macOS'
+        uses: actions/download-artifact@v4
+        with:
+          name: compiler-zithc-${{ matrix.target_name }}
+          path: compiler-artifact
+
       - name: Prepare artifact
         shell: bash
         run: |
           mkdir -p artifacts
-          if [ "${{ runner.os }}" = "Windows" ]; then
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            compiler="compiler-artifact/zithc-${{ matrix.target_name }}"
+            test -s "$compiler"
+            runtime_dir="$RUNNER_TEMP/zith-macos-runtime"
+            python3 zithc-src/scripts/package-macos-runtime.py \
+              --binary "$compiler" \
+              --binary lsp/build/zith-lsp \
+              --runtime-dir "$runtime_dir"
+            chmod +x "$compiler" lsp/build/zith-lsp
+            cp "$compiler" "artifacts/zithc-${{ matrix.target_name }}"
+            cp lsp/build/zith-lsp "artifacts/zith-lsp-${{ matrix.target_name }}"
+            tar -czf "artifacts/zith-macos-runtime-${{ matrix.runtime_arch }}.tar.gz" \
+              -C "$runtime_dir" lib manifest.json
+          elif [ "${{ runner.os }}" = "Windows" ]; then
             cp lsp/build/zith-lsp.exe "artifacts/zith-lsp-${{ matrix.target_name }}"
           else
             chmod +x lsp/build/zith-lsp
@@ -1181,7 +1221,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.create-release.outputs.tag || inputs.tag_name }}
-          files: artifacts/zith-lsp-*
+          files: artifacts/*
           draft: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

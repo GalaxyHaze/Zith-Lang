@@ -1,5 +1,6 @@
 param(
-    [string]$Version = ""
+    [string]$Version = "",
+    [switch]$Lsp
 )
 
 $Repo = if ([string]::IsNullOrWhiteSpace($env:ZITH_REPOSITORY)) {
@@ -36,6 +37,7 @@ if ([string]::IsNullOrWhiteSpace($ReleaseBaseUrl)) {
 
 # Detect OS and architecture
 $FileName = ""
+$LspFileName = ""
 $IsArm64 = $false
 
 # Check if we're on an ARM64 Windows
@@ -46,12 +48,15 @@ if ($Arch -match "ARM" -or $env:PROCESSOR_ARCHITECTURE -match "ARM64") {
 
 if ($IsArm64) {
     $FileName = "zithc-windows-arm64.exe"
+    $LspFileName = "zith-lsp-windows-arm64.exe"
 } else {
     $FileName = "zithc-windows-amd64.exe"
+    $LspFileName = "zith-lsp-windows-amd64.exe"
 }
 
 $DownloadUrl = "$ReleaseBaseUrl/$FileName"
 $TempPath = "$env:TEMP\zithc-installer.exe"
+$LspTempPath = "$env:TEMP\zith-lsp-installer.exe"
 $StdlibArchivePath = "$env:TEMP\zithc-stdlib.zip"
 $DownloadDir = Join-Path $env:TEMP "zithc-release-$PID"
 $GitHubCLI = Get-Command gh -ErrorAction SilentlyContinue
@@ -66,6 +71,7 @@ $InstallDir = Join-Path $ZithRoot "bin"
 $StdlibDir = Join-Path $ZithRoot "share\zith\stdlib"
 
 Write-Host "Downloading from $DownloadUrl..." -ForegroundColor Cyan
+$FailedAsset = $FileName
 
 try {
     if ($UseGitHubCLI) {
@@ -81,6 +87,16 @@ try {
             if ($LASTEXITCODE -ne 0) {
                 throw "GitHub CLI failed to download release assets"
             }
+            if ($Lsp) {
+                $FailedAsset = $LspFileName
+                & $GitHubCLI.Source release download $Version `
+                    --repo $Repo `
+                    --pattern $LspFileName `
+                    --dir $DownloadDir
+                if ($LASTEXITCODE -ne 0) {
+                    throw "GitHub CLI failed to download the language server asset"
+                }
+            }
         } finally {
             if ($null -eq $PreviousGhToken) {
                 Remove-Item Env:GH_TOKEN -ErrorAction SilentlyContinue
@@ -88,14 +104,29 @@ try {
                 $env:GH_TOKEN = $PreviousGhToken
             }
         }
+        $FailedAsset = $FileName
         Copy-Item -Path (Join-Path $DownloadDir $FileName) -Destination $TempPath -Force
+        $FailedAsset = "zithc-stdlib-$Version.zip"
         Copy-Item -Path (Join-Path $DownloadDir "zithc-stdlib-$Version.zip") `
             -Destination $StdlibArchivePath -Force
+        if ($Lsp) {
+            $FailedAsset = $LspFileName
+            Copy-Item -Path (Join-Path $DownloadDir $LspFileName) `
+                -Destination $LspTempPath -Force
+        }
     } else {
+        $FailedAsset = $FileName
         Invoke-WebRequest -Uri $DownloadUrl -OutFile $TempPath -UseBasicParsing
+        if ($Lsp) {
+            $FailedAsset = $LspFileName
+            Invoke-WebRequest -Uri "$ReleaseBaseUrl/$LspFileName" `
+                -OutFile $LspTempPath -UseBasicParsing
+        }
     }
 } catch {
-    Write-Error "Failed to download file. The version '$Version' might not exist."
+    $DownloadError = $_
+    $FailedUrl = "$ReleaseBaseUrl/$FailedAsset"
+    Write-Error "Failed to download required asset '$FailedAsset' for release '$Version' from $FailedUrl. GitHub reported: $($DownloadError.Exception.Message)"
     exit 1
 }
 
@@ -124,6 +155,10 @@ try {
 
     Copy-Item -Path $TempPath -Destination "$InstallDir\zithc.exe" -Force
     Remove-Item -Path $TempPath -Force
+    if ($Lsp) {
+        Copy-Item -Path $LspTempPath -Destination "$InstallDir\zith-lsp.exe" -Force
+        Remove-Item -Path $LspTempPath -Force
+    }
 
     $UserPath = [Environment]::GetEnvironmentVariable('Path', 'User')
     $InstallPathEntry = $InstallDir.TrimEnd('\')

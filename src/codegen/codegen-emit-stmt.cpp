@@ -23,6 +23,8 @@ llvm::Value *CodeGenEmit::emitBody(const hir::HirFunction &fn, const hir::HirMod
 
         for (auto inst_id : block.insts) {
             last = emitExpr(inst_id, mod);
+            if (failedEmission_)
+                return nullptr;
         }
         if (block.terminator != hir::kInvalidHirExpr) {
             emitExpr(block.terminator, mod);
@@ -137,6 +139,10 @@ llvm::Value *CodeGenEmit::emitRet(const hir::HirRet &ret, const hir::HirModule &
     auto *val = emitExpr(ret.value, mod);
     if (!val)
         return nullptr;
+    const llvm::BasicBlock *block = builder_.GetInsertBlock();
+    const llvm::Function *fn      = block != nullptr ? block->getParent() : nullptr;
+    if (fn != nullptr && fn->getReturnType()->isVoidTy())
+        return builder_.CreateRetVoid();
     return builder_.CreateRet(val);
 }
 

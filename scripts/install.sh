@@ -4,13 +4,15 @@ set -euo pipefail
 REPO="${ZITH_REPOSITORY:-GalaxyHaze/Zith-Lang}"
 VERSION=""
 USE_MUSL=false
+INSTALL_LSP=false
 OUTPUT_NAME="zithc"
 INSTALL_ROOT="${ZITH_INSTALL_ROOT:-}"
 RELEASE_BASE_URL="${ZITH_RELEASE_BASE_URL:-}"
 
 usage() {
-    echo "Usage: $0 [--musl] [<version>]"
+    echo "Usage: $0 [--musl] [--lsp] [<version>]"
     echo "  --musl        Download the musl-linked static binary"
+    echo "  --lsp         Also install the Zith language server"
     echo "  <version>     Specific version to install (default: latest)"
     exit 1
 }
@@ -18,8 +20,19 @@ usage() {
 for arg in "$@"; do
     case "$arg" in
         --musl) USE_MUSL=true ;;
+        --lsp) INSTALL_LSP=true ;;
         --help|-h) usage ;;
-        *) VERSION="$arg" ;;
+        -*)
+            echo "Unknown option: $arg" >&2
+            usage
+            ;;
+        *)
+            if [ -n "$VERSION" ]; then
+                echo "Only one version may be specified." >&2
+                usage
+            fi
+            VERSION="$arg"
+            ;;
     esac
 done
 
@@ -91,9 +104,16 @@ fi
 OS="$(uname -s)"
 ARCH="$(uname -m)"
 FILE_NAME=""
+LSP_FILE_NAME=""
+LSP_OUTPUT_NAME="zith-lsp"
+RUNTIME_FILE_NAME=""
 
 case "$OS" in
     Linux*)
+        LSP_FILE_NAME="zith-lsp-linux-amd64"
+        case "$ARCH" in
+            aarch64|arm64) LSP_FILE_NAME="zith-lsp-linux-arm64" ;;
+        esac
         if [ "$USE_MUSL" = true ]; then
             case "$ARCH" in
                 x86_64)   FILE_NAME="zithc-linux-amd64-musl" ;;
@@ -110,17 +130,32 @@ case "$OS" in
         ;;
     Darwin*)
         case "$ARCH" in
-            arm64|aarch64) FILE_NAME="zithc-macos-arm64" ;;
-            x86_64|amd64) FILE_NAME="zithc-macos-amd64" ;;
+            arm64|aarch64)
+                FILE_NAME="zithc-macos-arm64"
+                LSP_FILE_NAME="zith-lsp-macos-arm64"
+                RUNTIME_FILE_NAME="zith-macos-runtime-arm64.tar.gz"
+                ;;
+            x86_64|amd64)
+                FILE_NAME="zithc-macos-amd64"
+                LSP_FILE_NAME="zith-lsp-macos-amd64"
+                RUNTIME_FILE_NAME="zith-macos-runtime-amd64.tar.gz"
+                ;;
             *) echo "Architecture not supported on macOS: $ARCH" >&2; exit 1 ;;
         esac
         ;;
     MINGW*|MSYS*|CYGWIN*)
         FILE_NAME="zithc-windows-amd64.exe"
+        LSP_FILE_NAME="zith-lsp-windows-amd64.exe"
+        LSP_OUTPUT_NAME="zith-lsp.exe"
         OUTPUT_NAME="zithc.exe"
         ;;
     *) echo "OS not supported: $OS" >&2; exit 1 ;;
 esac
+
+if [[ "$INSTALL_LSP" == true && "$OS" == Linux* && "$USE_MUSL" == true ]]; then
+    echo "Error: the language server does not currently have musl release assets." >&2
+    exit 1
+fi
 
 DOWNLOAD_URL="$(release_base_url)/$FILE_NAME"
 TMP_DIR=$(mktemp -d)
@@ -132,6 +167,47 @@ if ! download_release_asset "$FILE_NAME" "$TMP_FILE"; then
     echo "Error: Failed to download binary." >&2
     echo "Please check the URL: $DOWNLOAD_URL" >&2
     exit 1
+fi
+
+if [ "$INSTALL_LSP" = true ]; then
+    echo "Downloading optional language server $LSP_FILE_NAME..."
+    if ! download_release_asset "$LSP_FILE_NAME" "$TMP_DIR/$LSP_OUTPUT_NAME"; then
+        echo "Error: Failed to download language server asset $LSP_FILE_NAME." >&2
+        exit 1
+    fi
+    chmod +x "$TMP_DIR/$LSP_OUTPUT_NAME"
+fi
+
+if [ "$OS" = "Darwin" ]; then
+    RUNTIME_ARCHIVE="$TMP_DIR/$RUNTIME_FILE_NAME"
+    RUNTIME_STAGE="$TMP_DIR/macos-runtime"
+    echo "Downloading shared macOS runtime..."
+    if ! download_release_asset "$RUNTIME_FILE_NAME" "$RUNTIME_ARCHIVE"; then
+        echo "Error: Failed to download macOS runtime asset $RUNTIME_FILE_NAME." >&2
+        exit 1
+    fi
+    RUNTIME_MEMBERS="$(tar -tzf "$RUNTIME_ARCHIVE")"
+    while IFS= read -r member; do
+        case "$member" in
+            /*|../*|*/../*|*/..|lib/*/*)
+                echo "Error: Unsafe path in macOS runtime archive: $member" >&2
+                exit 1
+                ;;
+            lib/|lib/*.dylib|manifest.json) ;;
+            *)
+                echo "Error: Unexpected path in macOS runtime archive: $member" >&2
+                exit 1
+                ;;
+        esac
+    done <<< "$RUNTIME_MEMBERS"
+    mkdir -p "$RUNTIME_STAGE"
+    tar -xzf "$RUNTIME_ARCHIVE" -C "$RUNTIME_STAGE"
+    if [ ! -s "$RUNTIME_STAGE/manifest.json" ] ||
+        ! find "$RUNTIME_STAGE/lib" -maxdepth 1 -type f -name '*.dylib' -print -quit |
+            grep -q .; then
+        echo "Error: macOS runtime archive has no manifest or dylibs." >&2
+        exit 1
+    fi
 fi
 
 chmod +x "$TMP_FILE"
@@ -152,9 +228,15 @@ case "$OS" in
         unzip -q "$TMP_DIR/zithc-stdlib.zip" -d "$STDLIB_STAGE"
         test -f "$STDLIB_STAGE/std/io/console.zith"
         cp "$TMP_FILE" "$BIN_DIR/$OUTPUT_NAME"
+        if [ "$INSTALL_LSP" = true ]; then
+            cp "$TMP_DIR/$LSP_OUTPUT_NAME" "$BIN_DIR/$LSP_OUTPUT_NAME"
+        fi
         rm -rf "$STDLIB_DIR"
         mv "$STDLIB_STAGE" "$STDLIB_DIR"
         echo "Download complete: $BIN_DIR/$OUTPUT_NAME"
+        if [ "$INSTALL_LSP" = true ]; then
+            echo "Language server installed to $BIN_DIR/$LSP_OUTPUT_NAME"
+        fi
         echo "Standard library extracted to $STDLIB_DIR"
         echo "Please add $BIN_DIR to your PATH."
         ;;
@@ -173,9 +255,23 @@ case "$OS" in
             tar xzf "$TMP_DIR/zithc-stdlib.tar.gz" -C "$STDLIB_STAGE"
             test -f "$STDLIB_STAGE/std/io/console.zith"
             mv "$TMP_FILE" "$BIN_DIR/zithc"
+            if [ "$INSTALL_LSP" = true ]; then
+                mv "$TMP_DIR/$LSP_OUTPUT_NAME" "$BIN_DIR/$LSP_OUTPUT_NAME"
+            fi
+            if [ "$OS" = "Darwin" ]; then
+                RUNTIME_DIR="$INSTALL_ROOT/share/zith/lib"
+                mkdir -p "$INSTALL_ROOT/share/zith"
+                rm -rf "$RUNTIME_DIR"
+                mv "$RUNTIME_STAGE/lib" "$RUNTIME_DIR"
+                mv "$RUNTIME_STAGE/manifest.json" "$INSTALL_ROOT/share/zith/runtime-manifest.json"
+                echo "macOS runtime installed to $RUNTIME_DIR"
+            fi
             rm -rf "$STDLIB_DIR"
             mv "$STDLIB_STAGE" "$STDLIB_DIR"
             echo "Standard library installed to $STDLIB_DIR"
+            if [ "$INSTALL_LSP" = true ]; then
+                echo "Language server installed to $BIN_DIR/$LSP_OUTPUT_NAME"
+            fi
             echo "Installation complete: $BIN_DIR/zithc"
         else
             echo "Installing Zith to /usr/local/bin/..."
@@ -195,10 +291,24 @@ case "$OS" in
                 echo "Installation failed. Check sudo permissions or try manually moving the file." >&2
                 exit 1
             fi
+            if [ "$INSTALL_LSP" = true ]; then
+                sudo mv "$TMP_DIR/$LSP_OUTPUT_NAME" "/usr/local/bin/$LSP_OUTPUT_NAME"
+            fi
+            if [ "$OS" = "Darwin" ]; then
+                RUNTIME_DIR="/usr/local/share/zith/lib"
+                sudo rm -rf "$RUNTIME_DIR"
+                sudo mkdir -p "$RUNTIME_DIR" /usr/local/share/zith
+                sudo mv "$RUNTIME_STAGE/lib" "$RUNTIME_DIR"
+                sudo mv "$RUNTIME_STAGE/manifest.json" /usr/local/share/zith/runtime-manifest.json
+                echo "macOS runtime installed to $RUNTIME_DIR"
+            fi
             sudo rm -rf "$STDLIB_DIR"
             sudo mkdir -p "${STDLIB_DIR%/*}"
             sudo mv "$STDLIB_STAGE" "$STDLIB_DIR"
             echo "Standard library installed to $STDLIB_DIR"
+            if [ "$INSTALL_LSP" = true ]; then
+                echo "Language server installed to /usr/local/bin/$LSP_OUTPUT_NAME"
+            fi
             echo "Installation complete! Run 'zithc --help' to get started."
         fi
         ;;

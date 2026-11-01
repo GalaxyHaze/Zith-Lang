@@ -569,6 +569,10 @@ void CodeGen::emitFnBody(const hir::HirFunction &fn, const hir::HirModule &mod) 
     emit.emitBody(fn, mod);
 
     currentFnSpan_ = fn.fnSpan;
+    if (emit.hasFailedEmission()) {
+        invalidIR_ = true;
+        llvmError("failed to emit an instruction in function '" + std::string(name) + "'");
+    }
 
     // A HIR block that carries a terminator but produced no LLVM terminator means an
     // operand failed to lower (an expression emitting nullptr). That is an internal

@@ -50,6 +50,9 @@ public:
     llvm::Value *emitBody(const hir::HirFunction &fn, const hir::HirModule &mod);
     void registerParams(const hir::HirFunction &fn, llvm::Function *llvmFn,
                         const hir::HirModule &mod);
+    bool hasFailedEmission() const noexcept {
+        return failedEmission_;
+    }
 
 private:
     llvm::Value *emitLiteral(const hir::HirLiteral &lit);
@@ -83,6 +86,7 @@ private:
     /// by the block terminator; the cache is cleared on every block boundary so
     /// it never reuses a value across an LLVM CFG edge.
     memory::FlatMap<hir::HirExprId, llvm::Value *> emittedValues_;
+    bool failedEmission_ = false;
 
     llvm::IRBuilderBase &builder_;
     CodeGenType &typeGen_;

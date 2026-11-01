@@ -24,6 +24,8 @@ RELEASE_ASSETS = (
     "zithc-linux-arm64-musl",
     "zithc-macos-amd64",
     "zithc-macos-arm64",
+    "zith-macos-runtime-amd64.tar.gz",
+    "zith-macos-runtime-arm64.tar.gz",
     "zithc-windows-amd64.exe",
     "zithc-windows-arm64.exe",
     "zithc-stdlib-${TAG}.tar.gz",
@@ -167,6 +169,22 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"cannot read installer {installer_path}: {error}")
         if "GalaxyHaze/Zith-Lang" not in installer_text:
             fail(f"{installer_path} does not use the canonical repository")
+    powershell_installer = (workflow_dir.parent.parent / "scripts/install.ps1").read_text(
+        encoding="utf-8"
+    )
+    if (
+        "Failed to download required asset '$FailedAsset' for release '$Version' from $FailedUrl"
+        not in powershell_installer
+        or "$($DownloadError.Exception.Message)" not in powershell_installer
+    ):
+        fail("scripts/install.ps1 hides the release asset download error")
+    shell_installer = (workflow_dir.parent.parent / "scripts/install.sh").read_text(
+        encoding="utf-8"
+    )
+    if "--lsp" not in shell_installer or "zith-lsp-" not in shell_installer:
+        fail("scripts/install.sh does not support optional LSP installation")
+    if "[switch]$Lsp" not in powershell_installer or "zith-lsp-" not in powershell_installer:
+        fail("scripts/install.ps1 does not support optional LSP installation")
     if "create_draft=true" not in artifact_text:
         fail(f"{artifact_workflow} does not force newly created releases to start as drafts")
     if "matrix.msvc_arch == ''" in artifact_text:
@@ -234,6 +252,23 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{artifact_workflow} does not require LLVM in {job}")
         if "verify-llvm-build.py" not in section:
             fail(f"{artifact_workflow} does not verify LLVM in {job}")
+    main_section = job_section(artifact_text, "build-main")
+    lsp_section = job_section(artifact_text, "build-lsp")
+    if (
+        "actions/upload-artifact@v4" not in main_section
+        or "compiler-${{ matrix.target_name }}" not in main_section
+        or "if: runner.os == 'macOS'" not in main_section
+    ):
+        fail(f"{artifact_workflow} does not stage macOS compiler binaries internally")
+    if "actions/download-artifact@v4" not in lsp_section:
+        fail(f"{artifact_workflow} does not retrieve the macOS compiler for runtime packaging")
+    if "scripts/package-macos-runtime.py" not in lsp_section:
+        fail(f"{artifact_workflow} does not package macOS transitive dependencies")
+    if "needs: [create-release, build-windows-arm64-llvm, build-main]" not in lsp_section:
+        fail(f"{artifact_workflow} packages macOS runtimes before compiler builds finish")
+    for marker in ("-headerpad_max_install_names", "zith-macos-runtime-"):
+        if marker not in artifact_text:
+            fail(f"{artifact_workflow} is missing macOS runtime marker {marker}")
     for job in ("build-main", "build-musl", "package-stdlib", "build-lsp", "build-wasm"):
         section = job_section(artifact_text, job)
         if "uses: softprops/action-gh-release@v2" in section and "draft: true" not in section:
@@ -299,10 +334,12 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{artifact_workflow} does not verify the Alpine compiler target")
     if "zig_target" in musl_section or "ZIG_VERSION" in artifact_text:
         fail(f"{artifact_workflow} retains the removed Zig musl toolchain")
+    if "needs: [create-release, build-windows-arm64-llvm]" not in job_section(
+        artifact_text, "build-main"
+    ):
+        fail(f"{artifact_workflow} does not gate build-main on full-backend LLVM")
     for job in ("build-main", "build-lsp"):
         section = job_section(artifact_text, job)
-        if "needs: [create-release, build-windows-arm64-llvm]" not in section:
-            fail(f"{artifact_workflow} does not gate {job} on full-backend LLVM")
         if "llvm_asset: win64" not in section or "llvm_asset: woa64" not in section:
             fail(f"{artifact_workflow} does not select Windows LLVM assets per architecture in {job}")
         if "Install Windows build tools" not in section:
@@ -499,6 +536,10 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{smoke_workflow} installer smoke uses no C-interop-free Zith program")
     if "test-import-console.zith" in smoke_text:
         fail(f"{smoke_workflow} installer smoke depends on optional libclang interop")
+    if '"$ZITH_RELEASE_TAG" --lsp' not in smoke_text or "-Version \"$env:ZITH_RELEASE_TAG\" -Lsp" not in smoke_text:
+        fail(f"{smoke_workflow} does not exercise optional LSP installation on Unix and Windows")
+    if "runtime-manifest.json" not in smoke_text:
+        fail(f"{smoke_workflow} does not verify the installed macOS runtime")
     publish_section = job_section(artifact_text, "publish-release")
     if "if: needs.create-release.outputs.draft == 'false'" not in publish_section:
         fail(f"{artifact_workflow} publishes without honoring draft mode")

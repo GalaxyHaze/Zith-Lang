@@ -51,8 +51,12 @@ llvm::Value *CodeGenEmit::emitExpr(hir::HirExprId id, const hir::HirModule &mod)
             [&](const hir::HirOpaqueCheck &check) { return emitOpaqueCheck(check, mod); },
             [&](const hir::HirRuntimePanic &panic) { return emitRuntimePanic(panic); },
             [&](const hir::HirPipe &pipe) -> llvm::Value * {
-                auto *stage  = emitExpr(pipe.stage, mod);
-                if (pipe.is_effect && stage != nullptr) {
+                const auto &stage_expr   = mod.getExpr(pipe.stage);
+                auto *stage              = emitExpr(pipe.stage, mod);
+                const bool empty_cleanup = std::holds_alternative<hir::HirCleanup>(stage_expr);
+                if (pipe.is_effect) {
+                    if (stage == nullptr && !empty_cleanup)
+                        return nullptr;
                     if (pipe.source_slot >= slots_.size())
                         return nullptr;
                     llvm::Value *slot_addr = slots_[pipe.source_slot];
@@ -1040,12 +1044,16 @@ llvm::Value *CodeGenEmit::emitLet(const hir::HirLet &let, const hir::HirModule &
     llvm::Value *init = nullptr;
     if (let.init != hir::kInvalidHirExpr) {
         init = emitExpr(let.init, mod);
+        if (init == nullptr) {
+            failedEmission_ = true;
+            return nullptr;
+        }
     }
 
     auto name      = interner_.lookup(let.name);
     auto *elemType = typeGen_.lower(let.type);
     auto *alloca   = builder_.CreateAlloca(elemType);
-    if (init) {
+    if (init != nullptr) {
         builder_.CreateStore(init, alloca);
     }
     namedValues_[name] = {alloca, elemType, true};

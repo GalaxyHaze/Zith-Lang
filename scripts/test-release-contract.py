@@ -4,12 +4,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -35,6 +37,82 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def write_runtime_archive(path: Path, corrupt_hash: bool = False) -> None:
+    library = b"test dylib payload"
+    library_hash = "0" * 64 if corrupt_hash else hashlib.sha256(library).hexdigest()
+    manifest = json.dumps(
+        {"libraries": {"libLLVM.dylib": library_hash}}
+    ).encode("utf-8")
+    with tarfile.open(path, "w:gz") as archive:
+        for name, content in (("lib/libLLVM.dylib", library), ("manifest.json", manifest)):
+            member = tarfile.TarInfo(name)
+            member.size = len(content)
+            archive.addfile(member, io.BytesIO(content))
+
+
+def write_stdlib_archives(directory: Path, version: str) -> None:
+    console_source = b"// release installer fixture\n"
+    tar_path = directory / f"zithc-stdlib-v{version}.tar.gz"
+    with tarfile.open(tar_path, "w:gz") as archive:
+        member = tarfile.TarInfo("std/io/console.zith")
+        member.size = len(console_source)
+        archive.addfile(member, io.BytesIO(console_source))
+
+    zip_path = directory / f"zithc-stdlib-v{version}.zip"
+    with zipfile.ZipFile(zip_path, "w") as archive:
+        archive.writestr("std/io/console.zith", console_source)
+
+
+def test_shell_installer(directory: Path, version: str) -> None:
+    release_url = directory.as_uri()
+    with tempfile.TemporaryDirectory(prefix="zith-install-smoke-") as raw_root:
+        install_root = Path(raw_root) / "with-lsp"
+        result = subprocess.run(
+            ["bash", str(SCRIPTS / "install.sh"), f"v{version}", "--lsp"],
+            cwd=ROOT,
+            env={
+                **os.environ,
+                "ZITH_INSTALL_ROOT": str(install_root),
+                "ZITH_RELEASE_BASE_URL": release_url,
+            },
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"POSIX installer with --lsp failed:\n{result.stderr}")
+        for relative in (
+            "bin/zithc",
+            "bin/zith-lsp",
+            "share/zith/stdlib/std/io/console.zith",
+        ):
+            if not (install_root / relative).is_file():
+                raise AssertionError(f"POSIX installer did not install {relative}")
+        if not (install_root / "bin/zith-lsp").stat().st_mode & 0o111:
+            raise AssertionError("POSIX installer did not mark zith-lsp executable")
+
+    with tempfile.TemporaryDirectory(prefix="zith-install-smoke-") as raw_root:
+        install_root = Path(raw_root) / "without-lsp"
+        result = subprocess.run(
+            ["bash", str(SCRIPTS / "install.sh"), f"v{version}"],
+            cwd=ROOT,
+            env={
+                **os.environ,
+                "ZITH_INSTALL_ROOT": str(install_root),
+                "ZITH_RELEASE_BASE_URL": release_url,
+            },
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        if result.returncode != 0:
+            raise AssertionError(f"POSIX installer default mode failed:\n{result.stderr}")
+        if not (install_root / "bin/zithc").is_file():
+            raise AssertionError("POSIX installer did not install zithc by default")
+        if (install_root / "bin/zith-lsp").exists():
+            raise AssertionError("POSIX installer installed zith-lsp without --lsp")
+
+
 def main() -> int:
     with tempfile.TemporaryDirectory(prefix="zith-release-contract-") as raw_dir:
         directory = Path(raw_dir)
@@ -45,6 +123,8 @@ def main() -> int:
             "zithc-linux-arm64-musl",
             "zithc-macos-amd64",
             "zithc-macos-arm64",
+            "zith-macos-runtime-amd64.tar.gz",
+            "zith-macos-runtime-arm64.tar.gz",
             "zithc-windows-amd64.exe",
             "zithc-windows-arm64.exe",
             "zith-lsp-linux-amd64",
@@ -54,13 +134,19 @@ def main() -> int:
             "zith-lsp-windows-amd64.exe",
             "zith-lsp-windows-arm64.exe",
         )
+        runtime_assets = {
+            "zith-macos-runtime-amd64.tar.gz",
+            "zith-macos-runtime-arm64.tar.gz",
+        }
         for name in release_assets:
-            (directory / name).write_bytes(b"release asset\n")
+            if name not in runtime_assets:
+                (directory / name).write_bytes(b"release asset\n")
+        for name in runtime_assets:
+            write_runtime_archive(directory / name)
         with zipfile.ZipFile(directory / "zithc-wasm.zip", "w") as archive:
             archive.writestr("zith-playground.wasm", b"wasm\n")
             archive.writestr("zith-stdlib.pack", b"stdlib\n")
-        (directory / f"zithc-stdlib-v{VERSION}.tar.gz").write_bytes(b"stdlib tar\n")
-        (directory / f"zithc-stdlib-v{VERSION}.zip").write_bytes(b"stdlib zip\n")
+        write_stdlib_archives(directory, VERSION)
         build_dir = directory / "build"
         build_dir.mkdir()
         (build_dir / "CMakeCache.txt").write_text(
@@ -108,6 +194,86 @@ def main() -> int:
             "--tag",
             f"v{VERSION}",
         )
+        test_shell_installer(directory, VERSION)
+        missing_asset = directory / "zithc-windows-amd64.exe"
+        missing_asset.unlink()
+        missing_asset_result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "validate-release-assets.py"),
+                "--release-dir",
+                str(directory),
+                "--tag",
+                f"v{VERSION}",
+            ],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SCRIPTS)},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        missing_asset.write_bytes(b"amd64 test asset\n")
+        if (
+            missing_asset_result.returncode == 0
+            or f"missing or empty release asset: {missing_asset}"
+            not in missing_asset_result.stderr
+        ):
+            raise AssertionError("release asset validation accepted a missing Windows compiler")
+
+        missing_runtime = directory / "zith-macos-runtime-amd64.tar.gz"
+        missing_runtime.unlink()
+        missing_runtime_result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "validate-release-assets.py"),
+                "--release-dir",
+                str(directory),
+                "--tag",
+                f"v{VERSION}",
+            ],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SCRIPTS)},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        write_runtime_archive(missing_runtime)
+        if (
+            missing_runtime_result.returncode == 0
+            or f"missing or empty release asset: {missing_runtime}"
+            not in missing_runtime_result.stderr
+        ):
+            raise AssertionError("release asset validation accepted a missing macOS runtime")
+
+        corrupt_runtime = directory / "zith-macos-runtime-arm64.tar.gz"
+        write_runtime_archive(corrupt_runtime, corrupt_hash=True)
+        corrupt_runtime_result = subprocess.run(
+            [
+                sys.executable,
+                str(SCRIPTS / "validate-release-assets.py"),
+                "--release-dir",
+                str(directory),
+                "--tag",
+                f"v{VERSION}",
+            ],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SCRIPTS)},
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        write_runtime_archive(corrupt_runtime)
+        if (
+            corrupt_runtime_result.returncode == 0
+            or "checksum mismatch for lib/libLLVM.dylib"
+            not in corrupt_runtime_result.stderr
+        ):
+            raise AssertionError(
+                "release asset validator did not report a corrupt macOS runtime: "
+                f"exit={corrupt_runtime_result.returncode}, "
+                f"stdout={corrupt_runtime_result.stdout!r}, "
+                f"stderr={corrupt_runtime_result.stderr!r}"
+            )
 
         for name, content in (
             ("zithc-windows-amd64.exe", b"amd64 test asset\n"),

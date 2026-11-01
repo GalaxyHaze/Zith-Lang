@@ -33,6 +33,23 @@ order:
   flag is used. `rm -rf "$STDLIB_DIR"` before extraction is the stale-file
   protection.
 
+## macOS Release Runtime
+
+The macOS compiler and language server link against Homebrew LLVM libraries.
+Release packaging therefore bundles their non-system Mach-O dependency closure
+once per architecture in `zith-macos-runtime-{amd64,arm64}.tar.gz`. The
+`build-main` job stages compiler binaries as short-lived internal artifacts.
+The matching macOS `build-lsp` job downloads its compiler, packages it with
+`zith-lsp`, and uploads both executables plus the shared runtime to the draft
+release. Both executables resolve libraries under `../share/zith/lib`.
+
+The Unix installer always installs this runtime on macOS, and installs the
+language server only when requested with `--lsp`. PowerShell uses `-Lsp` for
+the optional server. There is no musl LSP asset, so the Unix installer rejects
+`--musl --lsp`. Release asset validation checks each runtime dylib against the
+SHA-256 hashes in its manifest. The macOS packaging step still needs execution
+on hosted macOS runners before these release changes are considered verified.
+
 ## Smoke Check
 
 ```bash

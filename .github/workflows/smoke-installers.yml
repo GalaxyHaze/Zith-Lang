@@ -59,9 +59,14 @@ jobs:
       - name: Install released compiler and stdlib
         shell: bash
         run: |
-          bash scripts/install.sh "$ZITH_RELEASE_TAG"
+          bash scripts/install.sh "$ZITH_RELEASE_TAG" --lsp
           test -x "$ZITH_INSTALL_ROOT/bin/zithc"
+          test -x "$ZITH_INSTALL_ROOT/bin/zith-lsp"
           test -f "$ZITH_INSTALL_ROOT/share/zith/stdlib/std/io/console.zith"
+          if [ "$(uname -s)" = "Darwin" ]; then
+            test -s "$ZITH_INSTALL_ROOT/share/zith/runtime-manifest.json"
+            test -n "$(find "$ZITH_INSTALL_ROOT/share/zith/lib" -maxdepth 1 -type f -name '*.dylib' -print -quit)"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PAT }}
           ZITH_INSTALL_ROOT: ${{ runner.temp }}/zith-install
@@ -93,9 +98,12 @@ jobs:
           ZITH_INSTALL_ROOT: ${{ runner.temp }}\zith-install
           ZITH_RELEASE_TAG: ${{ inputs.release_tag }}
         run: |
-          pwsh -NoProfile -File .\scripts\install.ps1 -Version "$env:ZITH_RELEASE_TAG"
+          pwsh -NoProfile -File .\scripts\install.ps1 -Version "$env:ZITH_RELEASE_TAG" -Lsp
           if (-not (Test-Path "$env:ZITH_INSTALL_ROOT\bin\zithc.exe")) {
             throw "installed compiler was not found"
+          }
+          if (-not (Test-Path "$env:ZITH_INSTALL_ROOT\bin\zith-lsp.exe")) {
+            throw "installed language server was not found"
           }
           if (-not (Test-Path "$env:ZITH_INSTALL_ROOT\share\zith\stdlib\std\io\console.zith")) {
             throw "installed stdlib was not found"
