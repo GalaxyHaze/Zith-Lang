@@ -164,6 +164,18 @@ The block-as-argument spelling is accepted. The `@sync(val, { ... })` form is
 the shipped spelling for the synchronization sugar, and no parser change is
 wanted for it. The trailing-block form stays out of scope.
 
+Zith-- macros are not variadic. The arity check requires exactly as many
+arguments as declared parameters, so a macro cannot accept a trailing list of
+arguments. A sugar that must take a variable number of values therefore cannot
+be a macro and needs a function, a collection argument, or a compiler form.
+`@sync` takes one lock value and one block, so the fixed arity is not a
+limitation for it.
+
+A macro can be exported with `pub` and called through a module alias, so
+`@share.sync(val, { ... })` works when the macro is public in the imported
+module. The sugar can therefore live beside `Share` in a `soon/thread/share`
+module and still read as a call on the share surface.
+
 ## Errors
 
 `ThreadError` is an enum with named variants. The first variants are
@@ -203,5 +215,7 @@ own result, so a failing entry still returns through `merge` as its own
 - The full `ThreadError` variant list and which variants each backend returns.
 - How `soon/thread` starts a real thread on native, VM v2, and WASM, and what
   `c/thread.<os>.zith` exposes as raw externs.
-- Whether the synchronization sugar belongs in `soon/thread` or in a separate
-  module. Its spelling is settled as `@sync(val, { ... })`.
+- Whether the synchronization sugar lives in `soon/thread` or beside `Share` in
+  a `soon/thread/share` module. Its spelling is settled as
+  `@sync(val, { ... })`, and a public macro called through a module alias is
+  possible, so `@share.sync(val, { ... })` is expressible.
