@@ -1,3 +1,0 @@
-// Compatibility facade. The allocator implementation lives in soon/memory.
-export soon/memory/allocators/allocator
-export soon/memory/allocators/heap
