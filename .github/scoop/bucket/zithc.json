@@ -10,8 +10,8 @@
         "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.4.2/zithc-stdlib-v0.6.4.2.zip"
       ],
       "hash": [
-        "a30804ddb461774951ced0d79b266912d3ee4617827d990e731fad60e2c26525",
-        "ec9a32d46564364493e6bb281304733845d0f27ecf2d915520486684b57e8081"
+        "c45f99019389c1692fa79076444060b82aeba081a9c8b5d564a24194b086a5e5",
+        "9cea4cf209a6c6550ad2205681b40770992a490d5fc91fdcddcb5a93955c63f4"
       ]
     },
     "arm64": {
@@ -20,8 +20,8 @@
         "https://github.com/GalaxyHaze/Zith-Lang/releases/download/v0.6.4.2/zithc-stdlib-v0.6.4.2.zip"
       ],
       "hash": [
-        "8d06f8881e3bf94f60e7505103e538e562e7ad0c6ab5edc50bf82ba89e80f40e",
-        "ec9a32d46564364493e6bb281304733845d0f27ecf2d915520486684b57e8081"
+        "9ef4c6c83b54c0d16ea6a3b95f7f9542390a996706ff58a2c4223065129195e9",
+        "9cea4cf209a6c6550ad2205681b40770992a490d5fc91fdcddcb5a93955c63f4"
       ]
     }
   },
@@ -51,10 +51,12 @@
       "if ($architecture -eq 'arm64') { Rename-Item \"$dir\\zithc-windows-arm64.exe\" \"zithc.exe\" }",
       "$StdlibRoot = Split-Path $dir -Parent",
       "$StdlibDir = Join-Path $StdlibRoot 'share\\zith\\stdlib'",
+      "$StdlibSource = Join-Path $dir 'std'",
+      "if (-not (Test-Path -LiteralPath $StdlibSource -PathType Container)) { throw 'Scoop did not extract the stdlib archive' }",
       "New-Item -ItemType Directory -Path $StdlibDir -Force | Out-Null",
       "Get-ChildItem $StdlibDir -Force | Remove-Item -Recurse -Force",
-      "Expand-Archive -Path \"$dir\\zithc-stdlib-*.zip\" -DestinationPath $StdlibDir -Force",
-      "Remove-Item \"$dir\\zithc-stdlib-*.zip\" -Force"
+      "Copy-Item -LiteralPath $StdlibSource -Destination $StdlibDir -Recurse -Force",
+      "Remove-Item \"$dir\\zithc-stdlib-*.zip\" -Force -ErrorAction SilentlyContinue"
     ]
   }
 }
