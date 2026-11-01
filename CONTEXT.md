@@ -349,27 +349,68 @@ represented by handle `h1`.
 _Avoid_: invalidation, cancellation, destruction
 
 **Thread spawn**:
-The stdlib shorthand `spawn Entry(args)` that uses the active thread backend from a context; it is not core syntactic sugar in the compiler.
+The full-Zith context shorthand that creates a blueprint and launches it in one
+step, returning a handle. It is stdlib/context sugar, not a compiler keyword.
 _Avoid_: core spawn keyword, runtime.spawn method
 
+**Thread library spawn**:
+The Zith-- `soon/thread` `backend.spawn(entry)` that creates a `Job` blueprint
+and does not launch anything. Launch happens separately at `job.unbounded(args)`.
+_Avoid_: launcher, running thread
+
 **Thread backend**:
-The runtime capability/object that implements `ThreadBackend` and produces concrete thread handles for `fork`/`merge`, for example `pThread`.
+The full-Zith runtime capability/object that implements the `ThreadBackend`
+capability and produces concrete thread handles for `fork`/`merge`, for example
+`pThread`.
 _Avoid_: Branch capability, thread allocator, fork factory
+
+**Thread library backend**:
+The Zith-- `soon/thread` trait `ThreadBackend` and its default implementation
+`Thread`. A backend is an explicit value that builds a `Job` blueprint and
+launches it through `unbounded`. It is ordinary runtime code and carries no
+compiler ownership rule.
+_Avoid_: full-Zith `ThreadBackend` capability, global thread runtime
 
 **Thread handle**:
 An owned, single-consumer value satisfying the `Thread<T>` protocol. `merge` consumes it exactly once; backend concrete handles may expose extra methods such as `detach`.
 _Avoid_: ForkHandle, task, future
 
+**ThreadHandle**:
+The Zith-- `soon/thread` mergeable handle `ThreadHandle<T>`. `merge` blocks the
+calling thread, consumes the handle once, and returns the entry result. It is
+the library counterpart of the full-Zith `Thread<T>` handle.
+_Avoid_: full-Zith `Thread<T>`, future, join token
+
 **Job blueprint (draft)**:
-A reusable description of work. It does not contain launch arguments; bounded
-or unbounded launch supplies those separately.
+A reusable description of work, named `Job` in the Zith-- `soon/thread`
+library. It holds the entry and does not contain launch arguments; the launch
+site supplies those separately.
 _Avoid_: thread handle, running job
 
 **Monitoring handle (draft)**:
 A value associated with a launched execution so code can track it. In the
-current thread discussion, it is distinct from the blueprint and is not
-consumed by `merge`.
+current thread discussion, it is distinct from the blueprint and from
+`ThreadHandle<T>` and is not consumed by `merge`.
 _Avoid_: job blueprint, merge handle
+
+**ThreadError**:
+The Zith-- `soon/thread` error enum. It carries `Unsupported` for a backend that
+cannot start a thread and `Revoked` for a failed `Revokable` access. A thread
+creation error is separate from the entry's own result.
+_Avoid_: panic, host runtime error, entry result
+
+**Share**:
+The Zith-- `soon/thread` runtime wrapper `Share<T>` that lets several threads
+read or update one value through explicit methods. It is a library wrapper, not
+a compiler-enforced sharing rule.
+_Avoid_: full-Zith `share` keyword, `MultiShare`
+
+**Revokable**:
+The Zith-- `soon/thread` runtime wrapper `Revokable<T>`, a reference whose
+access the owner may revoke. A failed access returns `Result<T, ThreadError>`
+with the `Revoked` variant. It is a library wrapper, distinct from the
+full-Zith revocable-access qualifier described below.
+_Avoid_: full-Zith revocable type qualifier, nullable borrow
 
 **Executor**:
 The runtime object that owns a work queue and a worker pool and runs submitted
@@ -741,9 +782,10 @@ _Avoid_: normal thread, scoped task
 An execution flow that may outlive its parent. Borrowed resources crossing into it require an explicit revocable contract.
 _Avoid_: detached ownership, background task
 
-**Revokable**:
-A resource-access contract whose availability may be revoked by its parent
-flow. It is a reference whose access can be revoked, not a revocable value.
+**Revokable access**:
+The full-Zith resource-access contract whose availability may be revoked by its
+parent flow. It is a reference whose access can be revoked, not a revocable
+value.
 ADR-0034 fixes the source spelling as a type qualifier, not a wrapper type. The
 sigil `'` or the long form `grant` precedes any ownership qualifier except a
 bare `T`, so `'&T`, `'&mut T`, `'^T`, `'^mut T`, `'%T`, and `'%mut T` all

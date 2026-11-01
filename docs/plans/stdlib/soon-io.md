@@ -23,9 +23,9 @@ Size: module, the standard-library I/O execution surface.
 - A `state` function declares one state. `dock Start(args)` runs a machine to
   its return value on the current thread, and `jump Next(args)` transfers
   directly to the next state. Neither suspends nor schedules work by itself.
-- The `ThreadBackend` protocol returns a `Thread<T>` handle whose `merge` blocks
-  the current thread and consumes the handle once. It defines no resumable task
-  and no executor queue.
+- The `soon/thread` `ThreadBackend` trait launches a `Job` and returns a
+  `ThreadHandle<T>` whose `merge` blocks the current thread and consumes the
+  handle once. It defines no resumable task and no executor queue.
 - `stdlib/soon/fs/fs.zith` is an experimental stub. It declares the file
   operations but promises no runtime contract, so the blocking behavior of
   `read` and `write` is still open.

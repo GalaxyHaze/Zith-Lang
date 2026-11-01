@@ -60,6 +60,10 @@ The active plan homes are:
   surface for a proposed `soon/random` module, drawing stage.
 - `docs/plans/stdlib/soon-io.md`: executor, task, and non-blocking I/O surface
   for a proposed `soon/io` module, drawing stage.
+- `docs/plans/stdlib/soon-thread.md`: thread library for Zith-- with a
+  `ThreadBackend` trait, `Job` blueprints, `ThreadHandle<T>`, and runtime
+  `Share`/`Revokable` wrappers, drawing stage. It is ordinary runtime code and
+  does not add `fork`/`merge`/`revoke`/`spawn` keywords.
 
 The archived plan homes are:
 
