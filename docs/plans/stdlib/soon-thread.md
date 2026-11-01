@@ -166,22 +166,26 @@ wanted for it. The trailing-block form stays out of scope.
 
 Zith-- macros are not variadic. The arity check requires exactly as many
 arguments as declared parameters, so a macro cannot accept a trailing list of
-arguments. A sugar that must take a variable number of values therefore cannot
-be a macro and needs a function, a collection argument, or a compiler form.
-`@sync` takes one lock value and one block, so the fixed arity is not a
-limitation for it.
+arguments. The fixed-arity macro `raw macro destroy(a: identifier,
+b: identifier)` can already expand `@destroy(vec, arena)` into two method
+calls, even when the receiver types differ. Macros with the same name cannot
+currently be overloaded by arity, so a family of fixed-arity `destroy` macros
+is not a scalable substitute.
 
 Adding macro variadics is possible but is a compiler feature, not a library
-one. The pieces a `@destroy(vals...)` would need are: a rest marker in the
-macro parameter list, a macro argument kind that accepts a trailing list, the
-arity check relaxed to a minimum, and a splice that expands the captured list
-in the macro body. The macro body is an ordinary block, so the captured list
-has no existing expansion syntax. `..` today is `PipeCurrent` inside a pipeline
-and a range operator elsewhere, not a general spread, so a new splice form
-would be required. A variadic macro is also homogeneous only if it reuses the
-`[...]T` slice model, which rules out a mixed list. This is out of scope for
-the thread library. A function that takes a `[...]T` slice already covers the
-homogeneous `destroy` case.
+one. A heterogeneous call such as `@destroy(vec, arena)` is a good use case:
+each argument can have a different type and expand to its own `.destroy()`
+method call. The function variadic slice `[...]T` is not equivalent because
+all its elements must have the same type.
+
+The macro feature needs a rest parameter that captures the trailing arguments,
+an arity rule that permits the tail, and an explicit repetition form in the
+macro body that emits statements once per captured argument. The body is an
+ordinary block today, so it has no repetition syntax. `..` is `PipeCurrent`
+inside a pipeline and a range operator elsewhere, not a general spread. The
+repetition must also define source-order expansion and whether an empty tail is
+allowed. No syntax or behavior is decided here, and this feature remains out
+of scope for `soon/thread`.
 
 A macro can be exported with `pub` and called through a module alias, so
 `@share.sync(val, { ... })` works when the macro is public in the imported
