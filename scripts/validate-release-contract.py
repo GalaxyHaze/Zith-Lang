@@ -498,14 +498,32 @@ def validate_workflows(workflow_dir: Path) -> None:
             fail(f"{artifact_workflow} Scoop setup is missing {marker}")
     for marker in (
         '$bucket = Join-Path $env:RUNNER_TEMP "zith-scoop-local"',
-        'Copy-Item -LiteralPath $manifest',
+        "uses: actions/setup-python@v5",
+        "GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}",
+        "gh release download $env:RELEASE_TAG",
+        "Remove-Item Env:GH_TOKEN",
+        '$assetDirectory = Join-Path $env:RUNNER_TEMP "zith-scoop-assets"',
+        'foreach ($asset in @("zithc-windows-amd64.exe", $stdlibAsset))',
+        "Test-Path -LiteralPath (Join-Path $assetDirectory $asset)",
+        '"--bind", "127.0.0.1"',
+        "$localManifest.architecture.'64bit'.url = @(",
+        'Set-Content -LiteralPath $manifest -Encoding utf8',
         "git -C $bucket init --quiet",
         "git -C $bucket add bucket/zithc.json",
         "([System.Uri](Resolve-Path -LiteralPath $bucket).Path).AbsoluteUri",
         "scoop bucket add zith-local $bucketUri",
+        "scoop install zithc",
+        "zithc check examples\\loops-simple.zith",
+        "} finally {",
+        "Stop-Process -Id $server.Id -Force",
     ):
         if marker not in scoop_section:
-            fail(f"{artifact_workflow} Scoop smoke bucket setup is missing {marker}")
+            fail(f"{artifact_workflow} Scoop smoke test is missing {marker}")
+    token_removal = scoop_section.find("Remove-Item Env:GH_TOKEN")
+    scoop_install = scoop_section.find("scoop install zithc")
+    asset_download = scoop_section.find("gh release download $env:RELEASE_TAG")
+    if not asset_download < token_removal < scoop_install:
+        fail(f"{artifact_workflow} must remove the draft-download token before Scoop runs")
     dispatch_start = smoke_text.find("  workflow_dispatch:")
     call_start = smoke_text.find("  workflow_call:")
     if dispatch_start < 0 or call_start < 0 or call_start <= dispatch_start:
