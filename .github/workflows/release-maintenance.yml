@@ -161,7 +161,9 @@ jobs:
             --output source-archive.tar.gz "$URL"
           SHA=$(sha256sum source-archive.tar.gz | cut -d' ' -f1)
           test "${#SHA}" -eq 64
-          python3 scripts/update-homebrew-formula.py \
+          cp release-source/.github/homebrew/zithc.rb \
+            .github/homebrew/zithc.rb
+          python3 release-source/scripts/update-homebrew-formula.py \
             --formula .github/homebrew/zithc.rb \
             --repository "$GITHUB_REPOSITORY" \
             --version "$VERSION" \
