@@ -51,10 +51,12 @@
       "if ($architecture -eq 'arm64') { Rename-Item \"$dir\\zithc-windows-arm64.exe\" \"zithc.exe\" }",
       "$StdlibRoot = Split-Path $dir -Parent",
       "$StdlibDir = Join-Path $StdlibRoot 'share\\zith\\stdlib'",
+      "$StdlibSource = Join-Path $dir 'std'",
+      "if (-not (Test-Path -LiteralPath $StdlibSource -PathType Container)) { throw 'Scoop did not extract the stdlib archive' }",
       "New-Item -ItemType Directory -Path $StdlibDir -Force | Out-Null",
       "Get-ChildItem $StdlibDir -Force | Remove-Item -Recurse -Force",
-      "Expand-Archive -Path \"$dir\\zithc-stdlib-*.zip\" -DestinationPath $StdlibDir -Force",
-      "Remove-Item \"$dir\\zithc-stdlib-*.zip\" -Force"
+      "Copy-Item -LiteralPath $StdlibSource -Destination $StdlibDir -Recurse -Force",
+      "Remove-Item \"$dir\\zithc-stdlib-*.zip\" -Force -ErrorAction SilentlyContinue"
     ]
   }
 }
