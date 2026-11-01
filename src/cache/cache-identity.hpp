@@ -54,6 +54,13 @@ struct ContentFingerprint {
     bool operator==(const ContentFingerprint &) const = default;
 };
 
-inline const SemanticCompatibilityProfile kSharedHirProfile{"zith-shared-hir", 1};
+// Built by accessor rather than exposed as a namespace-scope object. Any
+// stored instance needs a dynamic initializer and an exit-time destructor for
+// its std::string, which the strict Clang warning set (and the WebAssembly
+// build, whose libc++ cannot constexpr-construct std::string) rejects. A
+// returned value has neither.
+inline SemanticCompatibilityProfile sharedHirProfile() {
+    return SemanticCompatibilityProfile{"zith-shared-hir", 1};
+}
 
 } // namespace zith::cache
