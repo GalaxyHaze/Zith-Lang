@@ -266,6 +266,13 @@ def validate_workflows(workflow_dir: Path) -> None:
         fail(f"{artifact_workflow} does not package macOS transitive dependencies")
     if "needs: [create-release, build-windows-arm64-llvm, build-main]" not in lsp_section:
         fail(f"{artifact_workflow} packages macOS runtimes before compiler builds finish")
+    if "macos-14" in artifact_text or "macos-14" in smoke_text:
+        fail("release workflows still use the retired macOS 14 runner")
+    if (
+        "os: macos-15\n            target_name: zithc-macos-arm64" not in main_section
+        or "os: macos-15\n            target_name: macos-arm64" not in lsp_section
+    ):
+        fail("release macOS ARM64 builds do not use the macos-15 runner")
     for marker in ("-headerpad_max_install_names", "zith-macos-runtime-"):
         if marker not in artifact_text:
             fail(f"{artifact_workflow} is missing macOS runtime marker {marker}")
@@ -510,7 +517,7 @@ def validate_workflows(workflow_dir: Path) -> None:
     if "v[0-9]+\\.[0-9]+\\.[0-9]+(\\.[0-9]+)?" not in validation_job:
         fail(f"{smoke_workflow} does not validate release tags before using them")
     for smoke_job, runner in (
-        ("smoke-installers-unix", "ubuntu-latest, macos-14"),
+        ("smoke-installers-unix", "ubuntu-latest, macos-15"),
         ("smoke-installer-windows", "windows-latest"),
         ("smoke-installer-wasm", "ubuntu-latest"),
     ):

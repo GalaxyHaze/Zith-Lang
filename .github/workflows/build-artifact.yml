@@ -224,7 +224,7 @@ jobs:
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
 
-          - os: macos-14
+          - os: macos-15
             target_name: zithc-macos-arm64
             cmake_flags: >-
               -DCMAKE_C_COMPILER=$(xcrun -f clang)
@@ -862,7 +862,7 @@ jobs:
               -DCMAKE_CXX_COMPILER=clang++
               -DCMAKE_LINKER=ld.lld
 
-          - os: macos-14
+          - os: macos-15
             target_name: macos-arm64
             runtime_arch: arm64
             cmake_flags: >-
