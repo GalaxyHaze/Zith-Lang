@@ -1,11 +1,10 @@
 # `soon/` Modules And The Stdlib Module Guard
 
 `stdlib/soon/` holds experimental modules that may move to `std/` after the
-promotion gate in `docs/plans/stdlib/soon-promotion.md`. Current entries are
-`soon/string.zith` (owning byte string), `soon/json.zith` (a stub),
-`soon/result/fallback.zith` (checked Result fallback helpers), and
-`soon/math/scalar.zith` (integer bounds and angle conversions), and
-`soon/algorithms/slice.zith` (allocation-free generic slice search and counting).
+promotion gate in `docs/plans/stdlib/soon-promotion.md`. The current surface
+includes root modules for alloc, counter, math, memory, new, panic, result, and
+string, plus the fs stub, collections, memory/allocators, result/fallback,
+math/scalar, math/vec, math/transform, and algorithms/slice.
 
 ## Module Guard Test
 
@@ -37,6 +36,34 @@ The module is heap-backed and stores `data: ?*char`, `length: u64`, and
 `soon/json.zith` used `mod(2) fn test()`; `mod(N)` depth is only valid on
 struct/interface fields, not on top-level functions. The stub uses `mod fn
 test()`.
+
+## Co-Located Test Direction
+
+Some `soon/` files declare `mod fn test()`, but module visibility is not test
+discovery. The `zithc test` runner discovers `#[test]` functions in files under
+the configured `test_dir`; the module-local functions are not run automatically.
+Runtime coverage for the moved helpers currently lives in C++ fixtures such as
+`tests/test-codegen.cpp`. To make tests genuinely co-located and executable,
+use the `#[test]` runner contract rather than treating `mod fn test()` as a
+test by convention.
+
+## Cross-Module Generic Call Binding
+
+`GenericCallBinding::module` identifies the caller module. In HIR call
+resolution, match a concrete generic function against the target module on
+`InstantiationInstance::module`, not the binding's caller module. Otherwise,
+equal declaration IDs from different modules can resolve a call to the wrong
+generic function. `test_imported_result_runtime` in `tests/test-codegen.cpp`
+covers imported `Result` constructors and `soon/result/fallback` helpers.
+
+## Stable Facade Boundary
+
+Do not remove `std/` facades as part of the `soon/` promotion work. `std/` is
+not only a compatibility layer: shipped modules such as `std/io/console`,
+`std/io/format`, `std/result`, and `std/test` remain active. The console module
+imports `std/io/format`, and `tests/test-interface-satisfaction.cpp` deliberately
+checks qualified types through `std/memory`, including cold and warm cache
+loads. Broader removal requires a separate stable-API migration.
 
 ## Facts And Gotchas
 

@@ -770,9 +770,12 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                     instantiations->callBinding(current_module_->key, callee_id)) {
                 const auto *instance = instantiations->at(binding->instance);
                 for (const auto &function : functions_) {
-                    if (function.instance != nullptr && function.module != nullptr &&
-                        function.module->key == binding->module &&
-                        function.instance->decl == method_decl->id && instance != nullptr &&
+                    // The binding's module is the caller; match the callee's
+                    // concrete instance by its target module instead.
+                    if (instance != nullptr && function.instance != nullptr &&
+                        function.module != nullptr &&
+                        function.module->key == instance->module &&
+                        function.instance->decl == method_decl->id &&
                         function.instance->args == instance->args) {
                         call.resolved_fn = function.hir_function_id;
                         break;
@@ -800,9 +803,11 @@ hir::HirExprId HirLowerModern::lowerCall(const frontend::Expression &expr) {
                         instantiations->callBinding(current_module_->key, callee_id)) {
                     const auto *instance = instantiations->at(binding->instance);
                     for (const auto &function : functions_) {
-                        if (function.instance != nullptr && function.module != nullptr &&
-                            function.module->key == binding->module &&
-                            function.instance->decl == target->decl && instance != nullptr &&
+                        // `binding->module` is the caller module, not the target.
+                        if (instance != nullptr && function.instance != nullptr &&
+                            function.module != nullptr &&
+                            function.module->key == instance->module &&
+                            function.instance->decl == target->decl &&
                             function.instance->args == instance->args) {
                             call.resolved_fn = function.hir_function_id;
                             break;
