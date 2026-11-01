@@ -1,5 +1,5 @@
 from vec
-import std/math as m
+import soon/math as m
 
 /// 3x3 column-major matrix stored as column vectors.
 pub struct Mat3 {

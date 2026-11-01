@@ -98,7 +98,7 @@ void test_reified_struct_reuses_args_identity() {
 void test_imported_generic_functions_resolve_explicit_arguments() {
     SessionRunner t;
     std::ofstream module(t.root / "generic_helper.zith", std::ios::binary | std::ios::trunc);
-    module << "from std/memory\n"
+    module << "from soon/memory\n"
               "pub fn echo<T>(value: T): T { return value; }\n"
               "pub fn create<T>(allocator: dyn Allocator): i32 { return 42; }\n";
     module.close();
@@ -116,7 +116,7 @@ void test_imported_generic_functions_resolve_explicit_arguments() {
 void test_imported_generic_layout_intrinsic_lowers_with_module_context() {
     SessionRunner t;
     const bool ok =
-        t.run("import std/collections/dyn_array as array\n"
+        t.run("import soon/collections/dyn_array as array\n"
               "fn main(): i32 { return 0; }\n",
               session::Stage::HirLowered, [](const session::CompilationSession &result) {
                   bool found_template = false;
@@ -258,7 +258,7 @@ void test_hashmap_stdlib_checks() {
 
 void test_inplace_trait_passes_check() {
     SessionRunner t;
-    const bool ok = t.run("from std/memory\n"
+    const bool ok = t.run("from soon/memory\n"
                           "\n"
                           "struct Box { value: i64 }\n"
                           "\n"

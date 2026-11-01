@@ -1,4 +1,4 @@
-import std/math as baseMath
+import soon/math as baseMath
 
 /// Returns the smaller of two signed 32-bit integers.
 pub fn minI32(left: i32, right: i32): i32 {

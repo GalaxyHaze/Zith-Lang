@@ -269,7 +269,7 @@ void test_imported_trait_qualified_call_in_populated_workdir() {
         "import libs/alpha as alpha\n"
         "import libs/beta as beta\n"
         "import libs/gamma as gamma\n"
-        "from std/memory\n"
+        "from soon/memory\n"
         "\n"
         "struct Box { value: i64 }\n"
         "\n"

@@ -1,6 +1,6 @@
 from std/io/format
-from std/memory/allocators/allocator
-from std/memory/allocators/heap
+from soon/memory/allocators/allocator
+from soon/memory/allocators/heap
 
 struct Ticket {
     value: u32,

@@ -1,0 +1,22 @@
+/// Experimental file-system surface.
+///
+/// This module is a stub. The final API is not promised yet; it will be
+/// defined once the ownership and error-model drawings are complete.
+pub struct File {}
+
+/// Opens `path` in `mode`. Returns null on failure.
+pub fn open(path: []char, mode: []char): ?*File;
+
+/// Closes `file`.
+pub fn close(file: lend File): void;
+
+/// Reads up to `count` bytes into `buffer`. Returns the number of bytes read.
+pub fn read(file: view File, buffer: lend []char): u64;
+
+/// Writes `buffer` to `file`. Returns the number of bytes written.
+pub fn write(file: view File, buffer: view []char): u64;
+
+mod fn test() {
+    // Stub only: no runtime contract yet.
+    @assert(true);
+}

@@ -1,0 +1,33 @@
+pub struct Counter {
+    pub index: i32 = 0,
+    pub limit: i32 = 0,
+    pub step: i32 = 1,
+    pub inclusive: bool = false,
+
+    fn next(self: lend Counter): ?i32 {
+        if (self->inclusive) {
+            if (self->index > self->limit) {
+                return null;
+            }
+        } else {
+            if (self->index >= self->limit) {
+                return null;
+            }
+        }
+        let value = self->index;
+        self->index = self->index + self->step;
+        return value;
+    }
+}
+
+mod fn test() {
+    var c = Counter { index: 0, limit: 3, step: 1 };
+    let v1 = c.next();
+    if (v1) { @assert(must v1 == 0); }
+    let v2 = c.next();
+    if (v2) { @assert(must v2 == 1); }
+    let v3 = c.next();
+    if (v3) { @assert(must v3 == 2); }
+    let v4 = c.next();
+    @assert(v4 is null);
+}

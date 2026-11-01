@@ -2,7 +2,7 @@ from c/io
 from c/stdlib
 from c/string
 
-from std/memory/allocators/allocator
+from soon/memory/allocators/allocator
 
 /// Feeble standard-library formatting contract. Instances append their
 /// textual representation to a reusable buffer and return a plain I/O status.

@@ -1,0 +1,17 @@
+import soon/alloc
+
+pub trait InPlace {
+    fn inplace(var self, allocator: dyn Allocator, args: opaque): bool;
+    fn clean(var self, allocator: dyn Allocator) {}
+}
+
+pub fn new<T: InPlace>(args: opaque): ?*T;
+pub fn delete<T: InPlace>(ptr: *T);
+
+// `make`/`release` are provided by the imported allocator module
+// (`soon/alloc` re-exports `soon/memory/allocators/allocator`).
+
+mod fn test() {
+    // new/delete require an InPlace implementation; compile-time contract only.
+    @assert(true);
+}

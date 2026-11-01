@@ -1,6 +1,6 @@
 import "string.h"
 
-from std/memory/allocators/allocator
+from soon/memory/allocators/allocator
 
 pub struct string {
     data: ?*char = null,
@@ -99,6 +99,6 @@ implement stringIterator {
         }
         let c = self.data[self.index]
         self.index = self.index + 1
-        stringCharStep { c };
+        return stringCharStep { c };
     }
 }

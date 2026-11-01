@@ -185,7 +185,7 @@ constexpr ParityCase kCases[] = {
     // Excluded console/allocator cases remain diagnostic, not parity promises.
     {"console_println_literal",
      "from std/io/console\n"
-     "from std/memory\n"
+     "from soon/memory\n"
      "\n"
      "fn main(): i32 {\n"
      "    let heap = HeapAllocator {};\n"
@@ -196,7 +196,7 @@ constexpr ParityCase kCases[] = {
      "and allocator behavior"},
     {"console_print_no_newline",
      "from std/io/console\n"
-     "from std/memory\n"
+     "from soon/memory\n"
      "\n"
      "fn main(): i32 {\n"
      "    let heap = HeapAllocator {};\n"
@@ -208,7 +208,7 @@ constexpr ParityCase kCases[] = {
      "and allocator behavior"},
     {"console_println_two_literals",
      "from std/io/console\n"
-     "from std/memory\n"
+     "from soon/memory\n"
      "\n"
      "fn main(): i32 {\n"
      "    let heap = HeapAllocator {};\n"
@@ -219,7 +219,7 @@ constexpr ParityCase kCases[] = {
      "and allocator behavior"},
     {"console_println_format_int",
      "from std/io/console\n"
-     "from std/memory\n"
+     "from soon/memory\n"
      "\n"
      "fn main(): i32 {\n"
      "    let heap = HeapAllocator {};\n"
@@ -231,8 +231,8 @@ constexpr ParityCase kCases[] = {
 
     // These stdlib cases are excluded from acceptance and remain diagnostic.
     {"hash_map_u64_put_get",
-     "import std/collections/hash_map_u64 as hm\n"
-     "from std/memory\n"
+     "import soon/collections/hash_map_u64 as hm\n"
+     "from soon/memory\n"
      "\n"
      "fn main(): i32 {\n"
      "    let heap = HeapAllocator {};\n"
@@ -256,7 +256,7 @@ constexpr ParityCase kCases[] = {
      "excluded: stdlib hash-map behavior depends on allocator and external FFI "
      "contracts"},
     {"allocator_heap_dyn_dispatch",
-     "from std/memory\n"
+     "from soon/memory\n"
      "\n"
      "fn main(): i32 {\n"
      "    let h = HeapAllocator {};\n"
@@ -269,7 +269,7 @@ constexpr ParityCase kCases[] = {
      "}\n",
      "excluded: dyn Allocator behavior is outside this parity slice"},
     {"inplace_opaque_contract",
-     "from std/memory\n"
+     "from soon/memory\n"
      "\n"
      "struct Box {\n"
      "    value: i64,\n"
@@ -331,7 +331,7 @@ constexpr ParityCase kCases[] = {
     // This guards the cross-module tagged-union member check on both backends.
     {"soon_string_iterator_end_member",
      "import soon/string as s\n"
-     "from std/memory\n"
+     "from soon/memory\n"
      "\n"
      "fn main(): i32 {\n"
      "    let heap = HeapAllocator {};\n"

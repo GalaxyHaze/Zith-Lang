@@ -1,6 +1,6 @@
 from std/test
 from std/io/format
-from std/memory/allocators/heap
+from soon/memory/allocators/heap
 
 #[test]
 fn assertion_helpers_pass() {

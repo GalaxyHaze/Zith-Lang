@@ -1,5 +1,5 @@
 from std/io/format
-from std/memory/allocators/heap
+from soon/memory/allocators/heap
 
 fn logBuffer(var buffer: lend FormatBuffer): void {
     let status = appendCharBuffer(lend buffer, 0 as char);

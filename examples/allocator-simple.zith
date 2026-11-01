@@ -1,7 +1,7 @@
 // Exercises: explicit `std/memory` allocation, alignment, and growth.
 // Expected exit code: 42
 
-from std/memory
+from soon/memory
 
 fn main(): i32 {
     let heap = HeapAllocator {};

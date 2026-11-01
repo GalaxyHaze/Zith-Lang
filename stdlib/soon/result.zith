@@ -1,0 +1,66 @@
+/// Positional result union and generic helpers.
+///
+/// `Result<T, E>` is the canonical positional union: the first member is the
+/// success payload `T`, the second is the error payload `E`. Named union cases
+/// are not part of the language, so `Ok`/`Err` are plain generic helpers that
+/// construct the union; extraction is the tagged/`raw` union cast.
+///
+/// `Ok`/`Err` bind their type arguments from the expected result type when the
+/// call sits in a typed position (a binding annotation or a declared return
+/// type), so `let r: Result<u32, IoError> = Ok(7);` does not spell `<u32, ...>`.
+/// An explicit `<T, E>` list still works.
+pub union Result<T, E> {
+    T,
+    E,
+}
+
+/// Wraps a success payload as the first member of `Result<T, E>`.
+pub fn Ok<T, E>(value: T): Result<T, E> {
+    var r: Result<T, E> = Result<T, E>{ value };
+    return r;
+}
+
+/// Wraps an error payload as the second member of `Result<T, E>`.
+pub fn Err<T, E>(value: E): Result<T, E> {
+    var r: Result<T, E> = Result<T, E>{ value };
+    return r;
+}
+
+/// True when `r` currently holds the success (`T`) member.
+pub fn isOk<T, E>(r: Result<T, E>): bool {
+    if (r is T) {
+        return true;
+    }
+    return false;
+}
+
+/// True when `r` currently holds the error (`E`) member.
+pub fn isErr<T, E>(r: Result<T, E>): bool {
+    if (r is E) {
+        return true;
+    }
+    return false;
+}
+
+/// Returns the success payload without a tag check. The caller must have
+/// established `isOk(r)` first; unwrapping the error member is undefined.
+pub fn unwrap<T, E>(r: Result<T, E>): T {
+    return raw r as T;
+}
+
+/// Returns the error payload without a tag check. The caller must have
+/// established `isErr(r)` first; unwrapping the success member is undefined.
+pub fn unwrapErr<T, E>(r: Result<T, E>): E {
+    return raw r as E;
+}
+
+mod fn test() {
+    let ok: Result<i32, i32> = Ok(7);
+    let err: Result<i32, i32> = Err(9);
+    @assert(isOk(ok) == true);
+    @assert(isErr(ok) == false);
+    @assert(unwrap(ok) == 7);
+    @assert(isOk(err) == false);
+    @assert(isErr(err) == true);
+    @assert(unwrapErr(err) == 9);
+}

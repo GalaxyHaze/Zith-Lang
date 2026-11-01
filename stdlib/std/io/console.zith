@@ -1,7 +1,7 @@
 from c/io
 from c/string
 from std/io/format
-from std/memory/allocators/allocator
+from soon/memory/allocators/allocator
 
 /// Parsing contract used by `InputLine.cast<T>`. Implementations parse one
 /// whole primitive value from a view of the line and return `null` on failure.

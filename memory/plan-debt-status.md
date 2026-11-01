@@ -56,6 +56,8 @@ The active plan homes are:
   `stdlib/soon/string.zith`.
 - `docs/plans/stdlib/soon-json.md`: JSON value model and text boundary for the
   `stdlib/soon/json.zith` stub.
+- `docs/plans/stdlib/soon-random.md`: random generator and uniform-distribution
+  surface for a proposed `soon/random` module, drawing stage.
 
 The archived plan homes are:
 

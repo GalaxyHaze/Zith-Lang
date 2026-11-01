@@ -1079,7 +1079,7 @@ void test_vm_v2_hello_stdlib_import_println() {
     {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
         output << "from std/io/console\n"
-                  "from std/memory\n"
+                  "from soon/memory\n"
                   "\n"
                   "fn main(): i32 {\n"
                   "    let heap = HeapAllocator {};\n"
@@ -1187,7 +1187,7 @@ void test_vm_v2_functions_with_stdlib() {
     {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
         output << "from std/io/console\n"
-                  "from std/memory\n"
+                  "from soon/memory\n"
                   "\n"
                   "fn add(a: i32, b: i32): i32 {\n"
                   "    a + b\n"
@@ -1518,7 +1518,7 @@ void test_vm_v2_hello_stdlib_import_print() {
     {
         std::ofstream output(source, std::ios::binary | std::ios::trunc);
         output << "from std/io/console\n"
-                  "from std/memory\n"
+                  "from soon/memory\n"
                   "\n"
                   "fn main(): i32 {\n"
                   "    let heap = HeapAllocator {};\n"

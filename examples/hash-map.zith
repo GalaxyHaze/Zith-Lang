@@ -1,8 +1,8 @@
 // Exercises: the checked generic `HashMap<K, V>` from the standard library.
 // Expected exit code: 0
 
-import std/collections/hash_map as hm
-from std/memory
+import soon/collections/hash_map as hm
+from soon/memory
 
 fn main(): i32 {
     let heap = HeapAllocator {};

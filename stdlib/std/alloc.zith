@@ -1,3 +1,3 @@
-// Compatibility facade. The allocator implementation lives in std/memory.
-export std/memory/allocators/allocator
-export std/memory/allocators/heap
+// Compatibility facade. The allocator implementation lives in soon/memory.
+export soon/memory/allocators/allocator
+export soon/memory/allocators/heap

@@ -221,7 +221,7 @@ void test_pipeline_unknown_attribute_warns_and_targets_are_checked() {
 void test_imported_console_void_main_discardable() {
     Workspace workspace;
     workspace.write("main.zith", "from std/io/console\n"
-                                 "from std/memory\n"
+                                 "from soon/memory\n"
                                  "fn main() {\n"
                                  "    let heap = HeapAllocator {};\n"
                                  "    println(heap, \"Hello World!\");\n"

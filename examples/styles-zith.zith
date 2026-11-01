@@ -2,7 +2,7 @@
 // Expected output: bucket=1
 
 from std/io/console
-from std/memory
+from soon/memory
 
 fn classify(score: i32): i32 {
     when (score) {

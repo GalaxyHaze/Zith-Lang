@@ -1,5 +1,5 @@
 import std/io/console
-from std/memory
+from soon/memory
 fn main(): i32 {
     let heap = HeapAllocator {};
     _ = std.console.println(heap, "full path one segment");

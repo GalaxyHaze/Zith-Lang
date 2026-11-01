@@ -1,7 +1,7 @@
 // Exercises: the `InPlace` construction/cleanup trait and allocator contract.
 // Expected exit code: 42
 
-from std/memory
+from soon/memory
 
 struct Box {
     value: i64

@@ -1,4 +1,4 @@
-import std/math as m
+import soon/math as m
 
 pub struct Vec2 { pub x: f64 = 0.0, pub y: f64 = 0.0 }
 

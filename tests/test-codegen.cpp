@@ -54,6 +54,7 @@ struct CodegenTest {
         session.setContent(std::string(input));
 
         bool ok     = session.run();
+        const bool runOk = ok;
         size_t errs = 0;
         std::vector<std::string> messages;
         for (const auto &d : session.diags().all()) {
@@ -61,14 +62,24 @@ struct CodegenTest {
                 errs++;
                 messages.push_back(d.message);
                 std::printf("    [Diag] Code: %u, Message: %s\n", d.code, d.message.c_str());
+                for (const auto &suggestion : d.suggestions)
+                    std::printf("    [DiagDetail] %s\n", suggestion.c_str());
             }
         }
 
-        if (ok && errs == 0)
+        if (!runOk)
+            std::printf("    [CodegenTest] compilation pipeline failed\n");
+
+        if (ok && errs == 0) {
             ok = session.linkAndExec();
+            if (!ok)
+                std::printf("    [CodegenTest] link or execution failed\n");
+        }
 
         std::string output = session.flushOutput();
         output += session.takeChildOutput();
+        if (!ok && !output.empty())
+            std::printf("    [CodegenTestOutput]\n%s", output.c_str());
         return {ok && errs == 0, errs, session.childExitCode(), std::move(output),
                 std::move(messages)};
     }
@@ -1310,8 +1321,8 @@ static void test_nested_optional_for_in_runtime() {
 static void test_imported_generic_hashmap_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-generic-hashmap.zith",
-                   "import std/collections/hash_map as hm\n"
-                   "from std/memory\n"
+                   "import soon/collections/hash_map as hm\n"
+                   "from soon/memory\n"
                    "fn main(): i32 {\n"
                    "    let heap = HeapAllocator {};\n"
                    "    var map = hm.HashMap<i64, i64> {};\n"
@@ -1337,8 +1348,8 @@ static void test_imported_generic_hashmap_runtime() {
 static void test_imported_generic_dynarray_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-generic-dynarray.zith",
-                   "import std/collections/dyn_array as da\n"
-                   "from std/memory\n"
+                   "import soon/collections/dyn_array as da\n"
+                   "from soon/memory\n"
                    "fn main(): i32 {\n"
                    "    let heap = HeapAllocator {};\n"
                    "    var values = da.create<i32>(heap);\n"
@@ -1370,7 +1381,7 @@ static void test_imported_generic_dynarray_runtime() {
 static void test_imported_result_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-generic-result.zith",
-                   "import std/result as res\n"
+                   "import soon/result as res\n"
                    "import soon/result/fallback as fallback\n"
                    "fn main(): i32 {\n"
                    "    let ok: res.Result<u32, bool> = res.Ok(7);\n"
@@ -1390,14 +1401,19 @@ static void test_imported_result_runtime() {
                    "    return 0;\n"
                    "}\n");
     CHECK(r.ok, "imported Result and soon fallback helpers compile, link, and execute");
-    CHECK_EQ(r.exitCode, 0, "Result accessors and fallback helpers cover both Ok and Err branches");
+    if (r.ok)
+        CHECK_EQ(r.exitCode, 0,
+                 "Result accessors and fallback helpers cover both Ok and Err branches");
 }
 
 static void test_soon_math_scalar_runtime() {
     CodegenTest t;
+#if !defined(_WIN32) && !defined(ZITH_IS_WASM)
+    t.opts.libraries.push("m");
+#endif
     auto r = t.run("codegen-soon-math-scalar.zith",
                    "import soon/math/scalar as math\n"
-                   "import std/math as baseMath\n"
+                   "import soon/math as baseMath\n"
                    "fn main(): i32 {\n"
                    "    if (math.minI32(4, -3) != -3) { return 1; }\n"
                    "    if (math.maxI32(4, -3) != 4) { return 2; }\n"
@@ -1412,7 +1428,9 @@ static void test_soon_math_scalar_runtime() {
                    "    return 0;\n"
                    "}\n");
     CHECK(r.ok, "soon scalar math helpers compile, link, and execute");
-    CHECK_EQ(r.exitCode, 0, "integer bounds and degree/radian conversions return expected values");
+    if (r.ok)
+        CHECK_EQ(r.exitCode, 0,
+                 "integer bounds and degree/radian conversions return expected values");
 }
 
 static void test_soon_slice_algorithms_runtime() {
@@ -1443,14 +1461,14 @@ static void test_imported_panic_runtime() {
     // module, and one that panics must write its message and abort.
     CodegenTest ok;
     auto safe = ok.run("codegen-panic-safe.zith",
-                       "import std/panic as pn\n"
+                       "import soon/panic as pn\n"
                        "fn main(): i32 { return 5; }\n");
     CHECK(safe.ok, "importing std/panic does not break a program that never panics");
     CHECK_EQ(safe.exitCode, 5, "a program importing std/panic still returns its value");
 
     CodegenTest t;
     auto r = t.run("codegen-panic-abort.zith",
-                   "import std/panic as pn\n"
+                   "import soon/panic as pn\n"
                    "fn main(): i32 {\n"
                    "    pn.panic(\"fatal: bad state\");\n"
                    "    return 0;\n"
@@ -1464,7 +1482,7 @@ static void test_imported_panic_runtime() {
 static void test_imported_memory_new_delete_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-memory-new.zith",
-                   "from std/memory\n"
+                   "from soon/memory\n"
                    "struct Box { value: i32 = 0 }\n"
                    "implement Box as InPlace {\n"
                    "    fn inplace(var self, args: opaque): bool {\n"
@@ -1488,7 +1506,7 @@ static void test_imported_memory_new_delete_runtime() {
 static void test_imported_memory_make_release_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-memory-make.zith",
-                   "from std/memory\n"
+                   "from soon/memory\n"
                    "struct Box { value: i32 = 0 }\n"
                    "implement Box as InPlace {\n"
                    "    fn inplace(var self, args: opaque): bool {\n"
@@ -1641,15 +1659,15 @@ static void test_bodyless_range_for_is_rejected() {
 static void test_imported_counter_runtime() {
     CodegenTest t;
     auto r = t.run("codegen-imported-counter.zith",
-                   "import std/counter\n"
+                   "import soon/counter\n"
                    "fn main(): i32 {\n"
                    "    var total: i32 = 0;\n"
-                   "    let half: std.counter.Counter = std.counter.Counter { index: 0, limit: 5, "
+                   "    let half: soon.counter.Counter = soon.counter.Counter { index: 0, limit: 5, "
                    "step: 1, inclusive: false };\n"
                    "    for (x in half) {\n"
                    "        total = total + x;\n"
                    "    }\n"
-                   "    let full: std.counter.Counter = std.counter.Counter { index: 0, limit: 5, "
+                   "    let full: soon.counter.Counter = soon.counter.Counter { index: 0, limit: 5, "
                    "step: 1, inclusive: true };\n"
                    "    for (y in full) {\n"
                    "        total = total + y;\n"
@@ -1728,7 +1746,7 @@ static void test_from_console_lowers_println_body() {
     CodegenTest t;
     t.opts.flags.emitIr(true);
     auto r = t.run("codegen-from-console.zith", "from std/io/console\n"
-                                                "from std/memory\n"
+                                                "from soon/memory\n"
                                                 "fn main(): i32 {\n"
                                                 "    let heap = HeapAllocator {};\n"
                                                 "    _ = println(heap, \"from import\");\n"
@@ -1748,7 +1766,7 @@ static void test_console_alias_resolves_member_without_global_import() {
     aliased.opts.flags.emitIr(true);
     auto ok = aliased.run("codegen-console-alias.zith",
                           "import std/io/console as console\n"
-                          "from std/memory\n"
+                          "from soon/memory\n"
                           "fn main(): i32 {\n"
                           "    let heap = HeapAllocator {};\n"
                           "    _ = console.println(heap, \"alias import\");\n"

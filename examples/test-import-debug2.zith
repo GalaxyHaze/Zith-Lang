@@ -1,4 +1,4 @@
-import std/counter
+import soon/counter
 fn main(): i32 {
     let c = std.counter.Counter(0, 3, 1, false);
     c.index

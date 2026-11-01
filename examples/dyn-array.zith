@@ -1,8 +1,8 @@
 // Exercises allocator-backed generic DynArray growth and element operations.
 // Expected exit code: 0
 
-import std/collections/dyn_array as da
-from std/memory
+import soon/collections/dyn_array as da
+from soon/memory
 
 fn main(): i32 {
     let heap = HeapAllocator {};

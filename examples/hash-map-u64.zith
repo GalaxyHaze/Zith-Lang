@@ -1,5 +1,5 @@
-import std/collections/hash_map_u64 as hm
-from std/memory
+import soon/collections/hash_map_u64 as hm
+from soon/memory
 
 fn main(): i32 {
     let heap = HeapAllocator {};

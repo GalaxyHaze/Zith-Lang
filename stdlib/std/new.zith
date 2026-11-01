@@ -1,12 +1,1 @@
-import std/alloc
-
-pub trait InPlace {
-    fn inplace(var self, allocator: dyn Allocator, args: opaque): bool;
-    fn clean(var self, allocator: dyn Allocator) {}
-}
-
-pub fn new<T: InPlace>(args: opaque): ?*T;
-pub fn delete<T: InPlace>(ptr: *T);
-
-// `make`/`release` are provided by the imported allocator module
-// (`std/alloc` re-exports `std/memory/allocators/allocator`).
+export soon/new
