@@ -160,6 +160,10 @@ rather than a syntax error. The block-as-argument form keeps `lock` and
 `unlock` around the block because the block is the macro's own statement. Use
 `@sync(val, { ... })`.
 
+The block-as-argument spelling is accepted. The `@sync(val, { ... })` form is
+the shipped spelling for the synchronization sugar, and no parser change is
+wanted for it. The trailing-block form stays out of scope.
+
 ## Errors
 
 `ThreadError` is an enum with named variants. The first variants are
@@ -200,5 +204,4 @@ own result, so a failing entry still returns through `merge` as its own
 - How `soon/thread` starts a real thread on native, VM v2, and WASM, and what
   `c/thread.<os>.zith` exposes as raw externs.
 - Whether the synchronization sugar belongs in `soon/thread` or in a separate
-  module, and whether a parser change for the trailing-block form is ever
-  wanted.
+  module. Its spelling is settled as `@sync(val, { ... })`.
