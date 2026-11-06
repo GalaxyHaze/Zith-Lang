@@ -47,7 +47,7 @@ Invoke-RestMethod https://raw.githubusercontent.com/GalaxyHaze/Zith/main/scripts
 Required toolchain versions are documented in the [compiler README](https://github.com/GalaxyHaze/Zith#readme).
 
 ```bash
-git clone https://github.com/GalaxyHaze/Zith.git
+git chttps://github.com/GalaxyHaze/Zith.git
 cd Zith
 cmake -S . -B build
 cmake --build build
@@ -58,5 +58,4 @@ cmake --build build
 ```
 
 Run `./build/zithc --help` after the build finishes, or add the build directory to `PATH`.
-LLVM 18+ is optional but required for LLVM code generation; without it, `zithc check` remains
-available. Use [First Program](doc:getting-started-quick-start) once the compiler is available.
+LLVM 18+ is optional but required for LLVM native code generation; without it, the compiler will fallback to a VM backend. Use [First Program](doc:getting-started-quick-start) once the compiler is available.
