@@ -348,6 +348,7 @@ document.addEventListener("keydown", (event) => {
 });
 
 const terminalInput = document.getElementById("terminal-input");
+const { dispatchCommandChain } = window.PlaygroundCommandChain;
 const commandHistory = [];
 let historyIndex = -1;
 
@@ -382,11 +383,22 @@ terminalInput.addEventListener("keydown", (e) => {
 });
 
 function executeCommand(cmd) {
-    writeOutput(`> ${cmd}`, "terminal-dim");
+    try {
+        return dispatchCommandChain(cmd, executeSingleCommand, () => {
+            writeOutput(`> ${cmd}`, "terminal-dim");
+        });
+    } catch (error) {
+        writeOutput(`> ${cmd}`, "terminal-dim");
+        writeOutput(error instanceof Error ? error.message : "Invalid command chain.", "terminal-error");
+        return false;
+    }
+}
+
+function executeSingleCommand(cmd) {
 
     if (cmd === "clear") {
         output.textContent = "";
-        return;
+        return true;
     }
 
     if (cmd === "help") {
@@ -398,8 +410,9 @@ function executeCommand(cmd) {
   zithc format
   --emit-tokens | --emit-ast | --emit-hir | --emit-cst | --emit-vir
   clear
+  clear && run  (run current source after clearing output)
   help`, "terminal-ok");
-        return;
+        return true;
     }
 
     const args = cmd.split(/\s+/).filter(Boolean);
@@ -415,24 +428,24 @@ function executeCommand(cmd) {
     if (subcommand === "fmt" || subcommand === "format") {
         if (commandArgs.length) {
             writeOutput("zithc fmt: unexpected argument; use 'zithc fmt' without arguments in the browser.", "terminal-error");
-            return;
+            return false;
         }
         writeOutputBlock("fmt");
         editor.value = formatSource(editor.value);
         updateEditorMeta();
         updateSyntaxHighlight();
         writeOutput("source formatted", "terminal-ok");
-        return;
+        return true;
     }
 
     if (subcommand === "run" || subcommand === "check" || subcommand === "build") {
         if (!runtime) {
             writeOutput("Compiler not loaded.", "terminal-error");
-            return;
+            return false;
         }
         if (!runtime.zith_compile_source || !runtime.zith_run_source) {
             writeOutput("Compiler ABI incompatible (missing compile/run exports).", "terminal-error");
-            return;
+            return false;
         }
 
         let parsed = null;
@@ -440,14 +453,14 @@ function executeCommand(cmd) {
             parsed = parseCompilerArgs(subcommand, commandArgs);
         } catch (error) {
             writeOutput(error.message, "terminal-error");
-            return;
+            return false;
         }
         const mode = subcommand === "run" ? 1 : 0;
-        runCompiler(mode, parsed.emitMask, subcommand);
-        return;
+        return runCompiler(mode, parsed.emitMask, subcommand);
     }
 
     writeOutput(`zithc: command not found: ${first || subcommand}`, "terminal-error");
+    return false;
 }
 
 function parseCompilerArgs(subcommand, args) {
@@ -498,6 +511,7 @@ function emitLabel(emitMask) {
 }
 
 function runCompiler(mode, emitMask, subcommand) {
+    let succeeded = false;
     let pointer = 0;
     let sourceLength = 0;
     try {
@@ -517,8 +531,10 @@ function runCompiler(mode, emitMask, subcommand) {
         if (result === 0) {
             if (subcommand === "check") {
                 writeOutput("check passed", "terminal-ok");
+                succeeded = true;
             } else if (subcommand === "build") {
                 writeOutput("build prepared (HIR artifact ready for cache integration)", "terminal-ok");
+                succeeded = true;
             } else if (subcommand === "run" && emitMask) {
                 writeOutputBlock("RUN");
                 const runResult = runtime.zith_run_source(pointer, sourceLength);
@@ -528,11 +544,19 @@ function runCompiler(mode, emitMask, subcommand) {
                     writeOutput(`run failed (Status: ${runResult})`, "terminal-error");
                 } else {
                     const exitCode = runtime.zith_exit_code ? runtime.zith_exit_code() : 0;
-                    writeOutput(`run completed (exit code ${exitCode})`, "terminal-ok");
+                    succeeded = exitCode === 0;
+                    writeOutput(
+                        `run ${succeeded ? "completed" : "failed"} (exit code ${exitCode})`,
+                        succeeded ? "terminal-ok" : "terminal-error"
+                    );
                 }
             } else {
                 const exitCode = runtime.zith_exit_code ? runtime.zith_exit_code() : 0;
-                writeOutput(`run completed (exit code ${exitCode})`, "terminal-ok");
+                succeeded = exitCode === 0;
+                writeOutput(
+                    `run ${succeeded ? "completed" : "failed"} (exit code ${exitCode})`,
+                    succeeded ? "terminal-ok" : "terminal-error"
+                );
             }
         } else {
             if (lastError) writeOutput(lastError, "terminal-error");
@@ -550,6 +574,7 @@ function runCompiler(mode, emitMask, subcommand) {
     } finally {
         if (pointer) runtime.zith_free(pointer, sourceLength);
     }
+    return succeeded;
 }
 
 function readLastError() {
