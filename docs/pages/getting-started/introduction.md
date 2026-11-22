@@ -8,8 +8,7 @@ kind: editorial
 ---
 # Introduction
 
-Zith and Zith-- are statically typed systems languages with separate language
-contracts. **Zith** is documented by its language-design specification;
+Zith and Zith-- are statically typed systems languages. **Zith** is documented by its language-design specification,
 **Zith--** is the language currently compiled by `zithc`.
 
 The [Zith documentation](route:zith) explains the Zith language design. The
@@ -18,5 +17,4 @@ by `zithc`.
 
 General topics such as installation, command-line usage, and the relationship
 between the languages live here. [Implementation Status](neutral:reference-implementation-status)
-describes compiler support for Zith-- only; it makes no claim about a Zith
-implementation.
+describes compiler support for Zith-- only, in the future Zith will have it own Implementation Sttus, when it development started.
