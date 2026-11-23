@@ -232,6 +232,20 @@ PLAYGROUND — editor + terminal
     color: var(--brand);
 }
 
+.terminal-control {
+    padding: 0.15rem 0.55rem;
+    border: 1px solid var(--border);
+    border-radius: 0.25rem;
+    background: var(--surface);
+    color: var(--text-muted);
+    font: inherit;
+    font-size: 0.8em;
+}
+
+.terminal-control:disabled {
+    opacity: 0.45;
+}
+
 #terminal-input {
     flex: 1;
     min-width: 0;

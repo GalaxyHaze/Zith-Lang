@@ -65,6 +65,7 @@
             <p class="eyebrow">browser_workbench</p>
             <h1 id="playground-title">Zith Playground</h1>
             <p>Write a program, inspect the compiler build, and run it with the published WebAssembly runtime.</p>
+            <p>When a program shows <code>input&gt;</code>, enter a line. EOF ends input. Stop cancels only while waiting. Synchronous work cannot be interrupted.</p>
         </div>
         <aside class="intro-meta" aria-label="Playground status">
             <span class="meta-label">Runtime</span>
@@ -104,8 +105,10 @@ fn main() {
             <div class="terminal-container" id="terminal-container" aria-live="polite">
                 <pre id="output" class="terminal-history"></pre>
                 <div class="terminal-input-line">
-                    <span class="terminal-prompt">&gt;</span>
+                    <span class="terminal-prompt" id="terminal-prompt">&gt;</span>
                     <input type="text" id="terminal-input" autocomplete="off" spellcheck="false" aria-label="Terminal input">
+                    <button type="button" class="terminal-control" id="terminal-eof" disabled>EOF</button>
+                    <button type="button" class="terminal-control" id="terminal-stop" disabled>Stop</button>
                 </div>
             </div>
         </article>

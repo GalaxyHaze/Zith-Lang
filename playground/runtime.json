@@ -1,1 +1,1 @@
-{"version":"local-worktree","abi":2,"stdlib":"zith-stdlib.pack","wasm_sha256":"7ec51208498096687a30be1b5b5365c67c0b1fd79df5ea61ab92159725ef2e8f","stdlib_sha256":"2f7ff5da3ce38a0ba45baf13a07597f96a6c695b3b44f06b36702048f7e3d852"}
+{"version":"local-worktree","abi":3,"stdlib":"zith-stdlib.pack","wasm_sha256":"a6ff5203971f8507d8bf5898f497837aa976e24f133345debdc0cbb9a438001b","stdlib_sha256":"24ecaa9b60507ac9f98a20185d111296a55f5bdf7a0a865ac582dab7e1df674d"}

@@ -61,6 +61,17 @@ test("a failed command stops the chain", () => {
     assert.deepEqual(dispatched, ["run", "build"]);
 });
 
+test("async commands preserve order and stop the chain on failure", async () => {
+    const dispatched = [];
+    const succeeded = await dispatchCommandChain("run && build && check", async command => {
+        dispatched.push(command);
+        return command !== "build";
+    });
+
+    assert.equal(succeeded, false);
+    assert.deepEqual(dispatched, ["run", "build"]);
+});
+
 test("a validated command is echoed once before dispatch", () => {
     const events = [];
     dispatchCommandChain("clear && run", command => {
