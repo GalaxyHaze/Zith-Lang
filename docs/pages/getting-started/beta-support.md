@@ -13,6 +13,11 @@ impact, and the workaround for each affected platform or feature. It is the
 support claim of record for the beta. Treat anything not listed as supported as
 a candidate or unverified.
 
+This path assumes you are new to Zith-- but comfortable with a terminal, build
+tools, and basic systems-language ideas such as types, functions, imports, and
+explicit resource management. It does not assume any compiler-implementation
+experience.
+
 ## Platform matrix
 
 | Platform and architecture | Artifact built | Selection mocked | Native smoke test | End-to-end check | Beta claim |
@@ -20,7 +25,7 @@ a candidate or unverified.
 | Linux x86-64 (GNU runtime) | yes | yes | yes | yes | **Supported** |
 | Linux AArch64 (GNU runtime) | yes | yes | no | no | Candidate, unverified |
 | Windows x86-64 | yes | yes | no | no | Candidate, unverified |
-| Windows AArch64 | yes | no | no | no | Candidate, unverified |
+| Windows AArch64 | yes | yes | no | no | Candidate, unverified |
 | Linux musl | yes | yes | no | no | Outside scope, unsupported |
 | macOS (x86-64 and AArch64) | yes | yes | no | no | Outside scope, unsupported |
 
@@ -51,4 +56,7 @@ On Linux x86-64 with the GNU runtime:
 
 See [First Program](doc:getting-started-quick-start) for the walkthrough and
 [Implementation Status](neutral:reference-implementation-status) for the
-per-feature compiler contract.
+per-feature compiler contract. The [Zith-- reference](doc:zith-subset-reference)
+is the language contract, the [Standard Library](doc:reference-20-standard-library)
+page lists the shipped modules, and [Editor Setup](doc:getting-started-editor-setup)
+covers the VS Code path.
