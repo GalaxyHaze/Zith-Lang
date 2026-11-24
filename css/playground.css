@@ -27,6 +27,15 @@ PLAYGROUND — editor + terminal
     color: var(--text-muted);
 }
 
+.intro > div > p.playground-note {
+    padding: var(--space-3) var(--space-4);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent);
+    border-radius: var(--radius);
+    background: var(--surface);
+    color: var(--text-muted);
+}
+
 .intro-meta {
     width: min(100%, 20rem);
     padding: var(--space-4);
