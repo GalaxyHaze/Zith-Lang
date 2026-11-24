@@ -3,9 +3,12 @@ const GLUE_URL = new URL("../playground/zith-playground.mjs", location.href);
 const STDLIB_PACK_URL = new URL("../playground/zith-stdlib.pack", location.href);
 const RUNTIME_MANIFEST_URL = new URL("../playground/runtime.json", location.href);
 const DEFAULT_SOURCE = `from std/io/console
+from std/memory
 
-fn main() {
-    _ = println("Hello, World!");
+fn main(): i32 {
+    let heap = HeapAllocator {}
+    _ = println(heap, "Hello, World!");
+    0
 }`;
 
 const editor = document.getElementById("source-code");
@@ -308,8 +311,18 @@ async function loadRuntime() {
             wasmBinary: wasmBytes,
             instantiateWasm(imports, receiveInstance) {
                 Object.assign(imports, buildImportObject(module, instanceRef, writeOutput));
-                instanceRef.instance = new WebAssembly.Instance(module, imports);
-                return receiveInstance(instanceRef.instance);
+                // The compiler module initialises more than 8 MiB of linear
+                // memory, so the synchronous WebAssembly.Instance constructor
+                // is disallowed on the main thread. Use the async API and
+                // return an empty object so Emscripten waits for the callback.
+                WebAssembly.instantiate(module, imports).then(instance => {
+                    instanceRef.instance = instance;
+                    receiveInstance(instance, module);
+                }, error => {
+                    runtimeStatusCompact.textContent = "Compiler: Load Failed";
+                    writeOutput(`Could not instantiate the WebAssembly compiler: ${error.message}`, "terminal-error");
+                });
+                return {};
             },
         });
         const runtimeExports = new Proxy({}, {
@@ -639,7 +652,6 @@ async function runCompiler(mode, emitMask, subcommand) {
         const result = subcommand === "run" && !emitMask
             ? await runGuestSource(pointer, sourceLength)
             : runtime.zith_compile_source(pointer, sourceLength, mode, 0, emitMask);
-        const lastError = readLastError();
 
         if (result === 0) {
             if (subcommand === "check") {
@@ -664,9 +676,10 @@ async function runCompiler(mode, emitMask, subcommand) {
         } else {
             if (subcommand === "run" && result === 6) {
                 writeOutput("run stopped while waiting for input", "terminal-muted");
-            } else if (lastError) {
-                writeOutput(lastError, "terminal-error");
             }
+            // The WASM compiler streams each diagnostic through zith.host_write
+            // as it is produced, so the terminal already shows it. Printing
+            // readLastError() again here would duplicate the same message.
             if (subcommand === "run" && result === 6) {
                 succeeded = false;
             } else if (subcommand === "check") {
@@ -688,13 +701,11 @@ async function runCompiler(mode, emitMask, subcommand) {
 
 async function reportGuestRun(pointer, length) {
     const result = await runGuestSource(pointer, length);
-    const error = readLastError();
     if (result === 6) {
         writeOutput("run stopped while waiting for input", "terminal-muted");
         return false;
     }
     if (result !== 0) {
-        if (error) writeOutput(error, "terminal-error");
         writeOutput(`run failed (Status: ${result})`, "terminal-error");
         return false;
     }
@@ -705,10 +716,6 @@ async function reportGuestRun(pointer, length) {
         succeeded ? "terminal-ok" : "terminal-error"
     );
     return succeeded;
-}
-
-function readLastError() {
-    return readLastErrorFrom(runtime);
 }
 
 function readLastErrorFrom(exports) {

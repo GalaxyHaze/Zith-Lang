@@ -87,9 +87,12 @@
                     <pre id="syntax-highlight" aria-hidden="true"></pre>
                     <label class="sr-only" for="source-code">Zith source code</label>
                     <textarea id="source-code" spellcheck="false" wrap="off" aria-label="Zith source code">from std/io/console
+from std/memory
 
-fn main() {
-    _ = println("Hello, World!");
+fn main(): i32 {
+    let heap = HeapAllocator {}
+    _ = println(heap, "Hello, World!");
+    0
 }</textarea>
                 </div>
             </div>
