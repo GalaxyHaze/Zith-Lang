@@ -437,6 +437,7 @@ def build_tree() -> list[dict]:
             nav_item("Getting Started", "getting-started-introduction", [
                 nav_item("Introduction", "getting-started-introduction"),
                 nav_item("Installation", "getting-started-installation"),
+                nav_item("Editor Setup", "getting-started-editor-setup"),
                 nav_item("Beta Support And Limitations", "getting-started-beta-support"),
                 nav_item("Why Zith", "getting-started-why-zith"),
             ], description="Introduction to the project and general setup."),

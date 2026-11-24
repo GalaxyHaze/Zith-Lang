@@ -17,7 +17,9 @@ Zith-- is in beta: its current language surface is near-complete and its
 behavior is intended to remain stable. Planned work focuses on additive
 language and standard-library extensions. See
 [Implementation Status](doc:reference-implementation-status) for verified
-compiler behavior and known restrictions.
+compiler behavior and known restrictions, and the
+[Beta Support And Limitations](doc:getting-started-beta-support) table for the
+platforms the beta supports.
 
 ## What works today
 

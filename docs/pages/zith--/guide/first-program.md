@@ -10,6 +10,9 @@ kind: editorial
 
 Zith-- is in beta. This guide uses the working `zithc create`, `build`, and
 `run` commands described in [Implementation Status](doc:reference-implementation-status).
+The beta supports Linux x86-64 with the GNU runtime. Read the
+[Beta Support And Limitations](doc:getting-started-beta-support) table before
+you rely on another platform.
 
 ## Create a project
 
@@ -41,3 +44,8 @@ zithc run
 ```
 
 `check` type-checks without emitting output. `run` compiles and executes in one step. Continue with the [Introduction](doc:getting-started-introduction) for the documentation map, or read [Syntax](doc:guide-syntax) before expanding the program.
+
+To work in VS Code, follow [Editor Setup](doc:getting-started-editor-setup). The
+standard-library reference in [Standard Library](doc:reference-20-standard-library)
+lists the stable `std/` modules, the raw `c/` bindings, and the experimental
+`soon/` modules.
