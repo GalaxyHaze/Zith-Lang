@@ -189,6 +189,13 @@ PLAYGROUND — editor + terminal
     caret-color: var(--brand);
 }
 
+/* The transparent textarea overlays the highlighted layer, so its own outline
+   is suppressed above. Restore a visible ring for keyboard focus. */
+#source-code:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
+}
+
 #source-code::selection {
     color: transparent;
     background: color-mix(in srgb, var(--accent) 30%, transparent);
@@ -263,6 +270,12 @@ PLAYGROUND — editor + terminal
     background: transparent;
     color: var(--code-text);
     font: inherit;
+}
+
+/* Keep a visible focus ring: the input clears the default outline above. */
+#terminal-input:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -2px;
 }
 
 .terminal-error { color: var(--code-keyword); }
