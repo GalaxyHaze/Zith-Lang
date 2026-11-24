@@ -674,13 +674,11 @@ async function runCompiler(mode, emitMask, subcommand) {
                 succeeded = true;
             }
         } else {
+            // The WASM compiler streams each diagnostic through zith.host_write
+            // as it is produced, so the terminal already shows it. Do not print
+            // readLastError() here or the same message appears twice.
             if (subcommand === "run" && result === 6) {
                 writeOutput("run stopped while waiting for input", "terminal-muted");
-            }
-            // The WASM compiler streams each diagnostic through zith.host_write
-            // as it is produced, so the terminal already shows it. Printing
-            // readLastError() again here would duplicate the same message.
-            if (subcommand === "run" && result === 6) {
                 succeeded = false;
             } else if (subcommand === "check") {
                 writeOutput(`check failed (Status: ${result})`, "terminal-error");
