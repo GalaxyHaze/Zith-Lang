@@ -168,7 +168,7 @@
                 .map(line => line.trim().replace(/^\|/, "").replace(/\|$/, "")
                     .split("|").map(cell => cell.trim()));
             if (!rows.length) return "";
-            let html = "<table>\n  <thead>\n    <tr>\n";
+            let html = "<div class=\"docs-table-wrap\">\n<table>\n  <thead>\n    <tr>\n";
             rows[0].forEach(cell => { html += `      <th>${inline(cell, page, tree)}</th>\n`; });
             html += "    </tr>\n  </thead>";
             if (rows.length > 1) {
@@ -180,7 +180,7 @@
                 });
                 html += "\n  </tbody>";
             }
-            return `${html}\n</table>`;
+            return `${html}\n</table>\n</div>`;
         }
 
         while (index < lines.length) {

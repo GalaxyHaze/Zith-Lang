@@ -292,7 +292,7 @@ def table_html(lines: list[str], page: Page, outputs: dict[str, str], source_map
             for line in lines if not is_table_separator(line)]
     if not rows:
         return ""
-    rendered = ["<table>", "  <thead>", "    <tr>"]
+    rendered = ['<div class="docs-table-wrap">', "<table>", "  <thead>", "    <tr>"]
     rendered.extend(f"      <th>{inline(cell, page, outputs, source_map)}</th>" for cell in rows[0])
     rendered += ["    </tr>", "  </thead>"]
     if len(rows) > 1:
@@ -302,7 +302,7 @@ def table_html(lines: list[str], page: Page, outputs: dict[str, str], source_map
             rendered.extend(f"      <td>{inline(cell, page, outputs, source_map)}</td>" for cell in row)
             rendered.append("    </tr>")
         rendered.append("  </tbody>")
-    rendered.append("</table>")
+    rendered += ["</table>", "</div>"]
     return "\n".join(rendered)
 
 

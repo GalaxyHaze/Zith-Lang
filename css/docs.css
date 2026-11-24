@@ -362,6 +362,11 @@ DOCS — documentation shell
     font-size: var(--step--1);
 }
 
+.docs-table-wrap {
+    max-width: 100%;
+    overflow-x: auto;
+}
+
 .docs-content th,
 .docs-content td {
     padding: var(--space-2) var(--space-3);
