@@ -16,4 +16,4 @@ cd hello-zith
 zithc run
 ```
 
-The generated project contains `ZithProject.toml` and `src/main.zith`. Read [Project Configuration](doc:reference-19-project-config) for the specified configuration format.
+The generated project contains `ZithProject.toml` and `src/main.zithm`. Read [Project Configuration](doc:reference-19-project-config) for the specified configuration format.

@@ -11,7 +11,7 @@ kind: editorial
 Compile and execute a single file.
 
 ```bash
-zithc execute src/main.zith
+zithc execute src/main.zithm
 ```
 
 For a normal project workflow, prefer [run](doc:cli-run). `execute` is useful when working directly with an individual source file.

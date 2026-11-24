@@ -18,11 +18,11 @@ zithc create hello-zith
 cd hello-zith
 ```
 
-`create` writes a `ZithProject.toml` and `src/main.zith` scaffold.
+`create` writes a `ZithProject.toml` and `src/main.zithm` scaffold.
 
 ## Write a program
 
-Replace `src/main.zith` with a small program:
+Replace `src/main.zithm` with a small program:
 
 ```zith
 fn add(a: i32, b: i32): i32 { a + b }

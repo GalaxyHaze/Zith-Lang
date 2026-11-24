@@ -19,7 +19,7 @@ Include the smallest source file that reproduces the problem:
 
 ```text
 zithc --version
-zithc check --include stdlib repro.zith
+zithc check --include stdlib repro.zithm
 ```
 
 Then describe:

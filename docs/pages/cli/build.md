@@ -12,7 +12,7 @@ Build a project or source target.
 
 ```bash
 zithc build
-zithc build src/main.zith
+zithc build src/main.zithm
 ```
 
 Use `build` when you want emitted output without immediately executing it. Run [check](doc:cli-check) first when you only need validation.

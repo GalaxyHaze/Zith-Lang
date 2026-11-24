@@ -11,7 +11,7 @@ kind: editorial
 Generate documentation from comments attached to Zith-- declarations.
 
 ```bash
-zithc docs src/main.zith
+zithc docs src/main.zithm
 ```
 
 The command requires input files; invoking it with nothing to read reports "no input files". Doc comments (`///` and `/** */`) attached to declarations are the input, so document declarations at their definition site.

@@ -247,14 +247,14 @@ canonical LLVM triple names such as `x86_64`, `aarch64`, `linux`, `darwin`,
 and `windows`:
 
 ```text
-foo.<arch>.<os>.zith
-foo.<arch>.zith
-foo.<os>.zith
-foo.zith
+foo.<arch>.<os>.zithm
+foo.<arch>.zithm
+foo.<os>.zithm
+foo.zithm
 ```
 
 A directory `foo/` is used as a module only when no matching file variant
-exists. `foo.zith` takes precedence over a same-named directory.
+exists. `foo.zithm` takes precedence over a same-named directory.
 
 ## Implement blocks on primitives and common types
 

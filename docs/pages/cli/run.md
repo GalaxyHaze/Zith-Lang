@@ -12,7 +12,7 @@ Compile and execute a project or source target in one command.
 
 ```bash
 zithc run
-zithc run src/main.zith
+zithc run src/main.zithm
 ```
 
 Use `run` for a local development loop. Use [build](doc:cli-build) when you need the compiled artifact without execution.
