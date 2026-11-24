@@ -219,8 +219,8 @@ binding already qualified as `lend` or `view` may also be passed without a new
 annotation.
 
 `unique`, `share`, `belong`, and `mut` in call position are rejected with
-`E2007`/`E4007`. Zith's memory model uses `&T`, `&mut T`, `^T`, and `%T`;
-those spellings are not part of Zith--.
+`E4007` (invalid call ownership). Zith's memory model uses `&T`, `&mut T`,
+`^T`, and `%T`; those spellings are not part of Zith--.
 
 ### Opaque tagged values
 

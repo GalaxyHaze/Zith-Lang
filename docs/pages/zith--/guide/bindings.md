@@ -11,9 +11,8 @@ kind: editorial
 Use `let` for an immutable binding and `var` when the binding will be reassigned.
 `const` declares immutable global or local values in the Zith-- contract.
 `global name: T = value` is specified as rejected with an `E2010` suggestion
-to use `const`. The imported implementation-status table currently lists a
-`global` binding form as working, which conflicts with the specification and
-implementation notes; use `const` as the canonical spelling.
+to use `const`, and the compiler rejects it with that diagnostic. Use `const`
+as the canonical spelling.
 
 ```zith
 let answer: i32 = 42;

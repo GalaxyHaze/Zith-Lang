@@ -91,7 +91,7 @@ after calls that consume a method receiver. `unique`, `share`, `belong`, and
 `mut` are rejected with `E2010` in Zith--.
 
 The ownership pipeline boundary is in place. The stable order is
-`sema -> comptime/solve -> NTA/SRA -> HIR`. Semantic facts are accumulated and
+`sema -> comptime/solve -> SRA -> HIR`. Semantic facts are accumulated and
 consumed before final lowering, and residual ownership facts attach to side
 tables instead of introducing ownership nodes into HIR.
 

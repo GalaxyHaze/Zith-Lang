@@ -8,7 +8,7 @@ kind: editorial
 ---
 # Syntax
 
-Zith source uses braces for blocks and semicolons for ordinary statements. A function body may end with an expression, which becomes its return value.
+Zith-- source uses braces for blocks and semicolons for ordinary statements. A function body may end with an expression, which becomes its return value.
 
 ```zith
 fn add(a: i32, b: i32): i32 {
