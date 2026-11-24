@@ -22,12 +22,23 @@
         if (typeof onValidated === "function") {
             onValidated(commands);
         }
+        let pending = null;
         for (const command of commands) {
-            if (dispatch(command) === false) {
+            if (pending) {
+                pending = pending.then(succeeded => {
+                    if (!succeeded) return false;
+                    return Promise.resolve(dispatch(command)).then(result => result !== false);
+                });
+                continue;
+            }
+            const result = dispatch(command);
+            if (result && typeof result.then === "function") {
+                pending = Promise.resolve(result).then(value => value !== false);
+            } else if (result === false) {
                 return false;
             }
         }
-        return true;
+        return pending || true;
     }
 
     const api = { parseCommandChain, dispatchCommandChain };

@@ -47,8 +47,9 @@ perguntas específicas dessa linguagem. Funcionalidades ainda não suportadas
 por `zithc` são descritas como parte do desenho, não como capacidades atuais.
 
 **Documentação Zith--**:
-Explica o subconjunto de Zith suportado pelo compilador `zithc`, incluindo
-o primeiro programa, guias práticos e perguntas específicas desse subconjunto.
+Explica a linguagem irmã Zith-- e o contrato implementado pelo compilador
+`zithc`, incluindo o primeiro programa, guias práticos e perguntas específicas
+dessa linguagem. Zith-- e Zith têm especificações e contratos separados.
 
 **Dev Log**:
 O blog de desenvolvimento (`about/`). _Avoid_: blog, diário.

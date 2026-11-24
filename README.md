@@ -33,6 +33,13 @@ Drafts are saved automatically in the current browser and do not change the
 published site. Markdown sources are included in the static build, so editing
 works without sign-in. Publishing edits is not enabled yet.
 
+The backend setup wizard for documentation pull requests is
+[`scripts/setup-docs-publishing.sh`](scripts/setup-docs-publishing.sh). Run it
+from this checkout after the `worker/` files are available. It deploys the
+Worker and stores the GitHub App values as Cloudflare Worker secrets; it does
+not create, approve, reject, or merge a pull request. The public editor still
+needs its `Publish` action connected before visitors can use the backend.
+
 ### Site build
 
 The header and footer live in `partials/` and are expanded into `_site/` by

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="robots" content="noindex, follow">
+    <!-- include:head -->
+    <title>Glarea — A Zith IDE</title>
+    <meta name="description" content="A desktop IDE shaped around Zith, its language tools, and your project.">
+
+    <link rel="icon" type="image/svg+xml" href="{{baseurl}}/media/Glarea/glarea-mark.svg">
+    <link rel="stylesheet" href="{{baseurl}}/css/fonts.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/tokens.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/base.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/header.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/footer.css">
+    <link rel="stylesheet" href="{{baseurl}}/css/glarea-alternative.css">
+</head>
+<body class="glarea-alt-page">
+    <!-- include:header active="glarea" -->
+
+    <main class="ga-main container" id="top">
+        <section class="ga-hero" aria-labelledby="ga-title">
+            <div class="ga-hero-copy">
+                <h1 id="ga-title">Zith, with room to think.</h1>
+                <p>A desktop IDE shaped around the language, its tools, and the project you are building.</p>
+                <div class="ga-hero-actions">
+                    <a class="ga-button ga-button-primary" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download Glarea <span aria-hidden="true">↗</span></a>
+                    <a class="ga-text-link" href="#language">Explore the workspace <span aria-hidden="true">↓</span></a>
+                </div>
+            </div>
+
+            <div class="ga-editor-window" aria-label="Illustration of the Glarea editor">
+                <div class="ga-window-bar">
+                    <div class="ga-window-brand">
+                        <img src="{{baseurl}}/media/Glarea/glarea-mark.svg" alt="" width="19" height="19">
+                        <span>zith-project</span>
+                    </div>
+                    <div class="ga-window-controls" aria-hidden="true"><span></span><span></span><span></span></div>
+                </div>
+                <div class="ga-editor-body">
+                    <aside class="ga-activity" aria-hidden="true">
+                        <span class="ga-activity-active">▤</span>
+                        <span>⌕</span>
+                        <span>⑂</span>
+                    </aside>
+                    <aside class="ga-explorer">
+                        <p class="ga-panel-title">Explorer</p>
+                        <p class="ga-tree-root"><span aria-hidden="true">⌄</span> ZITH-PROJECT</p>
+                        <p class="ga-tree-file ga-tree-selected"><span class="ga-file-mark">Z</span> main.zith</p>
+                        <p class="ga-tree-file"><span class="ga-file-mark ga-file-muted">Z</span> math.zith</p>
+                        <p class="ga-tree-file"><span class="ga-file-mark ga-file-muted">◈</span> ZithProject.toml</p>
+                    </aside>
+                    <div class="ga-editor-content">
+                        <div class="ga-tab"><span class="ga-file-mark">Z</span> main.zith <span class="ga-tab-close" aria-hidden="true">×</span></div>
+                        <div class="ga-breadcrumb">src <span>/</span> main.zith</div>
+                        <div class="ga-code" aria-label="Example Zith source code">
+                            <span class="ga-line"><i>1</i><b class="ga-keyword">fn</b> <b class="ga-function">add</b>(a: <b class="ga-type">i32</b>, b: <b class="ga-type">i32</b>): <b class="ga-type">i32</b> {</span>
+                            <span class="ga-line"><i>2</i>    a + b</span>
+                            <span class="ga-line"><i>3</i>}</span>
+                            <span class="ga-line ga-line-space"><i>4</i></span>
+                            <span class="ga-line"><i>5</i><b class="ga-keyword">fn</b> <b class="ga-function">main</b>() {</span>
+                            <span class="ga-line"><i>6</i>    <b class="ga-keyword">let</b> total = <b class="ga-function">add</b>(20, 22);</span>
+                            <span class="ga-line"><i>7</i>}</span>
+                        </div>
+                        <div class="ga-status"><span>Ln 6, Col 27</span><span>UTF-8</span><span>Zith</span></div>
+                    </div>
+                </div>
+                <div class="ga-window-foot">
+                    <span><i class="ga-status-dot"></i> Language server ready</span>
+                    <span>main.zith</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="ga-intro" id="language" aria-labelledby="ga-language-title">
+            <div class="ga-section-index">01 <span>/</span> Language tools</div>
+            <div class="ga-intro-main">
+                <h2 id="ga-language-title">The language is part of the workspace.</h2>
+                <p>Glarea connects editing to Zith’s language server, bringing completions, hover details, navigation, and diagnostics close to the code.</p>
+                <a class="ga-text-link" href="https://github.com/GalaxyHaze/Zith-Studio" target="_blank" rel="noopener noreferrer">See the project on GitHub <span aria-hidden="true">↗</span></a>
+            </div>
+            <div class="ga-language-demo" aria-label="Language tools available in the editor">
+                <div class="ga-demo-heading"><span>main.zith</span><span>Language tools</span></div>
+                <div class="ga-demo-row"><span class="ga-demo-symbol">◇</span><span>Go to definition</span><kbd>F12</kbd></div>
+                <div class="ga-demo-row"><span class="ga-demo-symbol">Aa</span><span>Hover information</span><span class="ga-demo-arrow">↗</span></div>
+                <div class="ga-demo-row"><span class="ga-demo-symbol">✓</span><span>Diagnostics in context</span><span class="ga-demo-arrow">↗</span></div>
+                <div class="ga-demo-row"><span class="ga-demo-symbol">↳</span><span>Signature help</span><span class="ga-demo-arrow">↗</span></div>
+            </div>
+        </section>
+
+        <section class="ga-workspace" id="workspace" aria-labelledby="ga-workspace-title">
+            <div class="ga-workspace-copy">
+                <div class="ga-section-index">02 <span>/</span> Workspace</div>
+                <h2 id="ga-workspace-title">Your project stays in view.</h2>
+                <p>Move between files, search across a workspace, and keep your editor context as you switch projects.</p>
+            </div>
+            <div class="ga-workspace-visual" aria-label="Workspace explorer and project search illustration">
+                <div class="ga-workspace-rail">
+                    <span class="ga-rail-active">▤</span><span>⌕</span><span>⑂</span>
+                </div>
+                <div class="ga-workspace-files">
+                    <p class="ga-panel-title">Workspace</p>
+                    <p class="ga-tree-root"><span aria-hidden="true">⌄</span> zith-project</p>
+                    <div class="ga-file-row"><span class="ga-file-mark">Z</span><span>src/main.zith</span><span class="ga-file-state">●</span></div>
+                    <div class="ga-file-row"><span class="ga-file-mark ga-file-muted">Z</span><span>src/math.zith</span></div>
+                    <div class="ga-file-row"><span class="ga-file-mark ga-file-muted">◈</span><span>ZithProject.toml</span></div>
+                    <div class="ga-workspace-search"><span>⌕</span><span>Search workspace</span><kbd>Ctrl ⇧ F</kbd></div>
+                </div>
+                <div class="ga-workspace-note">
+                    <span class="ga-note-line"></span>
+                    <p>Files, search, and editor tabs in one focused view.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="ga-git" id="git" aria-labelledby="ga-git-title">
+            <div class="ga-section-index">03 <span>/</span> Git</div>
+            <div class="ga-git-content">
+                <div>
+                    <h2 id="ga-git-title">Stay close to the change.</h2>
+                    <p>Review repository status, stage the files you choose, and commit without leaving your workspace.</p>
+                </div>
+                <div class="ga-git-visual" aria-label="Git workflow illustration">
+                    <div class="ga-git-top"><span>Source Control</span><span>main</span></div>
+                    <div class="ga-git-file"><span class="ga-git-change">M</span><span>src/main.zith</span><span>+</span></div>
+                    <div class="ga-git-file"><span class="ga-git-change">M</span><span>src/math.zith</span><span>+</span></div>
+                    <div class="ga-git-commit">Commit message… <span>Commit</span></div>
+                </div>
+            </div>
+        </section>
+
+        <section class="ga-download" aria-labelledby="ga-download-title">
+            <div>
+                <h2 id="ga-download-title">Make space for the work.</h2>
+                <p>Open a Zith project in Glarea and keep the language close as you build.</p>
+            </div>
+            <a class="ga-button ga-button-dark" href="https://github.com/GalaxyHaze/Zith-Studio/releases" target="_blank" rel="noopener noreferrer">Download Glarea <span aria-hidden="true">↗</span></a>
+        </section>
+    </main>
+
+    <!-- include:footer -->
+</body>
+</html>
